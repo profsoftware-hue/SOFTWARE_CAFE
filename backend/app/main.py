@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,6 +12,9 @@ from sqlalchemy import text
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.session import engine
+
+
+logger = logging.getLogger("ccp.api")
 
 
 @asynccontextmanager
@@ -33,6 +38,14 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def log_requests(request, call_next):
+        started_at = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.info("%s %s -> %s %.1fms", request.method, request.url.path, response.status_code, elapsed_ms)
+        return response
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
 
