@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.models.enums import PaymentMethod
 
 
 class InventoryValueOut(BaseModel):
@@ -38,6 +40,14 @@ class DailyClosingItemOut(BaseModel):
     total: Decimal
 
 
+class DailyClosingPaymentOut(BaseModel):
+    payment_method: PaymentMethod
+    tickets: int
+    subtotal: Decimal
+    tax_total: Decimal
+    total: Decimal
+
+
 class DailyClosingOut(BaseModel):
     date_from: date
     date_to: date
@@ -46,4 +56,5 @@ class DailyClosingOut(BaseModel):
     tax_total: Decimal
     total: Decimal
     company_name: str
+    payment_methods: list[DailyClosingPaymentOut] = Field(default_factory=list)
     items: list[DailyClosingItemOut]

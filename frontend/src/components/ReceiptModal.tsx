@@ -2,6 +2,7 @@ import { Printer, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
+import { PAYMENT_METHOD_LABELS } from '@/lib/payments'
 import type { SaleReceipt } from '@/types/api'
 
 interface ReceiptModalProps {
@@ -9,14 +10,6 @@ interface ReceiptModalProps {
   receipt: SaleReceipt | null
   loading?: boolean
   onClose: () => void
-}
-
-const paymentLabels: Record<string, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  MIXED: 'Mixto',
-  CREDIT: 'Crédito',
 }
 
 const escapeHtml = (value: string): string =>
@@ -101,7 +94,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
     <div><span>No.</span><strong>${escapeHtml(receipt.sale_number)}</strong></div>
     <div><span>Fecha</span><span>${formatDateTime(receipt.sold_at)}</span></div>
     <div><span>Cliente</span><span>${escapeHtml(receipt.customer_name ?? 'Consumidor final')}</span></div>
-    <div><span>Pago</span><span>${escapeHtml(paymentLabels[receipt.payment_method] ?? receipt.payment_method)}</span></div>
+    <div><span>Pago</span><span>${escapeHtml(PAYMENT_METHOD_LABELS[receipt.payment_method] ?? receipt.payment_method)}</span></div>
     <div><span>Vendedor</span><span>${escapeHtml(receipt.seller_name ?? '-')}</span></div>
   </div>
 
@@ -194,7 +187,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
               </div>
               <div className="flex justify-between gap-2">
                 <span>Pago</span>
-                <span>{paymentLabels[receipt.payment_method] ?? receipt.payment_method}</span>
+                <span>{PAYMENT_METHOD_LABELS[receipt.payment_method] ?? receipt.payment_method}</span>
               </div>
             </div>
 

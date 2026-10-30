@@ -15,6 +15,7 @@ class PaymentMethod(str, Enum):
     CASH = "CASH"
     CARD = "CARD"
     TRANSFER = "TRANSFER"
+    QR = "QR"
     MIXED = "MIXED"
     CREDIT = "CREDIT"
 

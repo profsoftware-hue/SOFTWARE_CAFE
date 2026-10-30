@@ -105,6 +105,10 @@ def test_product_sale_and_closing() -> None:
     assert closing.status_code == 200, closing.text
     assert closing.json()["tickets"] >= 1
     assert float(closing.json()["total"]) >= 0
+    payment_methods = {item["payment_method"]: item for item in closing.json()["payment_methods"]}
+    assert set(payment_methods) == {"CASH", "CARD", "TRANSFER", "QR", "MIXED", "CREDIT"}
+    assert payment_methods["CASH"]["tickets"] >= 1
+    assert float(payment_methods["CASH"]["total"]) >= 1190.0
 
     stock = client.get("/api/v1/inventory/stock/current", headers=headers)
     assert stock.status_code == 200
@@ -130,6 +134,27 @@ def test_product_sale_and_closing() -> None:
     outside_row = next(item for item in outside_range.json() if item["product_id"] == product_id)
     assert float(outside_row["sold_quantity"]) == 0.0
     assert float(outside_row["sold_total"]) == 0.0
+
+    qr_sale = client.post(
+        "/api/v1/inventory/sales",
+        json={
+            "warehouse_id": 1,
+            "payment_method": "QR",
+            "items": [{"product_id": product_id, "quantity": 1}],
+            "confirm": True,
+        },
+        headers=headers,
+    )
+    assert qr_sale.status_code == 201, qr_sale.text
+
+    closing_with_qr = client.get(
+        f"/api/v1/reports/daily-closing?date_from={today}&date_to={today}",
+        headers=headers,
+    )
+    assert closing_with_qr.status_code == 200, closing_with_qr.text
+    qr_methods = {item["payment_method"]: item for item in closing_with_qr.json()["payment_methods"]}
+    assert qr_methods["QR"]["tickets"] >= 1
+    assert float(qr_methods["QR"]["total"]) >= 1190.0
 
 
 def test_roles_and_permissions_are_enforced() -> None:
