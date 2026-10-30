@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
+import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { ReceiptModal } from '@/components/ReceiptModal'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
 import type { Product } from '@/types/api'
@@ -212,17 +213,12 @@ export const PosPage = () => {
                 className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"
               >
                 <div className="flex items-center gap-3">
-                  {product.image_url ? (
-                    <img
-                      src={product.image_url}
-                      alt={product.name}
-                      className="h-14 w-14 rounded-lg border border-slate-200 object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-400">
-                      Sin imagen
-                    </div>
-                  )}
+                  <AuthenticatedImage
+                    path={product.image_url}
+                    alt={product.name}
+                    className="h-14 w-14 rounded-lg border border-slate-200 object-cover"
+                    fallbackClassName="h-14 w-14 rounded-lg border border-slate-200"
+                  />
                   <div>
                     <p className="font-semibold text-slate-800">{product.name}</p>
                     <p className="text-xs text-slate-500">
