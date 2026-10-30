@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = BACKEND_DIR.parent
+DEFAULT_SECRET_KEY = "change-this-secret-key"
 
 
 class Settings(BaseSettings):
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     api_v1_prefix: str = "/api/v1"
 
-    secret_key: str = "change-this-secret-key"
+    secret_key: str = DEFAULT_SECRET_KEY
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 8
 
@@ -34,13 +35,13 @@ class Settings(BaseSettings):
     db_dialect: str = "postgresql"
 
     upload_dir: Path = BACKEND_DIR / "uploads"
-    cors_origins: str = "*"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @field_validator("secret_key", mode="before")
     @classmethod
     def _normalize_secret_key(cls, value: str | None) -> str:
         if value is None or (isinstance(value, str) and not value.strip()):
-            return "change-this-secret-key"
+            return DEFAULT_SECRET_KEY
         return value
 
     @field_validator("environment", mode="before")
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     def _normalize_environment(cls, value: str | None) -> str:
         if value is None or (isinstance(value, str) and not value.strip()):
             return "development"
-        return value
+        return value.strip().lower()
 
     @field_validator("db_dialect", mode="before")
     @classmethod
@@ -66,6 +67,20 @@ class Settings(BaseSettings):
             return BACKEND_DIR / "uploads"
         candidate = Path(value)
         return candidate if candidate.is_absolute() else BACKEND_DIR / candidate
+
+    @model_validator(mode="after")
+    def _validate_production_settings(self) -> "Settings":
+        if self.environment != "production":
+            return self
+
+        if self.secret_key == DEFAULT_SECRET_KEY or len(self.secret_key) < 32:
+            raise ValueError(
+                "SECRET_KEY inseguro: en producción debe tener al menos 32 caracteres y no ser el valor por defecto."
+            )
+
+        if "*" in self.cors_origins_list:
+            raise ValueError("CORS_ORIGINS no puede ser '*' en producción.")
+        return self
 
     @property
     def database_url(self) -> str:
