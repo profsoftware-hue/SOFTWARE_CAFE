@@ -209,6 +209,7 @@ export interface CurrentStockRow {
   sale_price_excl_tax: string
   vat_rate: string
   stock_value: string
+  sold_quantity: string
 }
 
 export interface InventoryValue {
