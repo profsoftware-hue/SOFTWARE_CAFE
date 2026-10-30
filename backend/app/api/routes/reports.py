@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, func, select, true
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles
 from app.db.session import get_db
+from app.models.catalogs import Warehouse
 from app.models.company import CompanyProfile
 from app.models.enums import DocStatus
 from app.models.inventory import InventoryBalance
@@ -26,6 +28,15 @@ from app.schemas.reports import (
 
 
 router = APIRouter(prefix="/reports", tags=["Reportes"])
+BOGOTA_TZ = ZoneInfo("America/Bogota")
+
+
+def _range_bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
+    """Límites del día en hora de Colombia, convertidos a UTC por PostgreSQL."""
+    return (
+        datetime.combine(date_from, time.min, tzinfo=BOGOTA_TZ),
+        datetime.combine(date_to, time.max, tzinfo=BOGOTA_TZ),
+    )
 
 
 @router.get("/inventory-value", response_model=InventoryValueOut)
@@ -47,41 +58,46 @@ def low_stock(
     _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
     warehouse_id: int | None = Query(default=None),
 ) -> list[CurrentStockOut]:
-    query = """
-    SELECT
-      p.id AS product_id,
-      p.sku,
-      p.barcode,
-      p.name AS product_name,
-      p.image_path,
-      w.id AS warehouse_id,
-      w.code AS warehouse_code,
-      w.name AS warehouse_name,
-      COALESCE(b.quantity, 0) AS current_stock,
-      p.min_stock,
-      (COALESCE(b.quantity, 0) <= p.min_stock) AS is_low_stock,
-      p.cost_price,
-      p.sale_price_excl_tax,
-      p.vat_rate,
-      ROUND(COALESCE(b.quantity, 0) * p.cost_price, 2) AS stock_value
-    FROM ccp.products p
-    CROSS JOIN ccp.warehouses w
-    LEFT JOIN ccp.inventory_balances b
-      ON b.product_id = p.id
-     AND b.warehouse_id = w.id
-    WHERE p.is_active = TRUE
-      AND w.is_active = TRUE
-      AND (COALESCE(b.quantity, 0) <= p.min_stock)
-    """
+    stock = func.coalesce(InventoryBalance.quantity, 0)
+    stmt = (
+        select(
+            Product.id.label("product_id"),
+            Product.sku,
+            Product.barcode,
+            Product.name.label("product_name"),
+            Product.image_path,
+            Warehouse.id.label("warehouse_id"),
+            Warehouse.code.label("warehouse_code"),
+            Warehouse.name.label("warehouse_name"),
+            stock.label("current_stock"),
+            Product.min_stock,
+            (stock <= Product.min_stock).label("is_low_stock"),
+            Product.cost_price,
+            Product.sale_price_excl_tax,
+            Product.vat_rate,
+            func.round(stock * Product.cost_price, 2).label("stock_value"),
+        )
+        .select_from(Product)
+        .join(Warehouse, true())
+        .outerjoin(
+            InventoryBalance,
+            and_(
+                InventoryBalance.product_id == Product.id,
+                InventoryBalance.warehouse_id == Warehouse.id,
+            ),
+        )
+        .where(
+            Product.is_active.is_(True),
+            Warehouse.is_active.is_(True),
+            stock <= Product.min_stock,
+        )
+    )
 
-    params: dict[str, int] = {}
     if warehouse_id is not None:
-        query += " AND w.id = :warehouse_id"
-        params["warehouse_id"] = warehouse_id
+        stmt = stmt.where(Warehouse.id == warehouse_id)
 
-    query += " ORDER BY w.id, p.name"
-
-    rows = db.execute(text(query), params).mappings().all()
+    stmt = stmt.order_by(Warehouse.id.asc(), Product.name.asc())
+    rows = db.execute(stmt).mappings().all()
     return [CurrentStockOut(**row) for row in rows]
 
 
@@ -109,11 +125,11 @@ def top_products(
     )
 
     if date_from is not None:
-        dt_from = datetime.combine(date_from, time.min)
-        stmt = stmt.where(Sale.sold_at >= dt_from)
+        start, _ = _range_bounds(date_from, date_from)
+        stmt = stmt.where(Sale.sold_at >= start)
     if date_to is not None:
-        dt_to = datetime.combine(date_to, time.max)
-        stmt = stmt.where(Sale.sold_at <= dt_to)
+        _, end = _range_bounds(date_to, date_to)
+        stmt = stmt.where(Sale.sold_at <= end)
 
     stmt = (
         stmt.group_by(SaleItem.product_id, Product.sku, Product.name)
@@ -132,16 +148,14 @@ def sales_range(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
 ) -> SalesRangeOut:
-    dt_from = datetime.combine(date_from, time.min)
-    dt_to = datetime.combine(date_to, time.max)
-
+    start, end = _range_bounds(date_from, date_to)
     row = db.execute(
         select(
             func.count(Sale.id).label("tickets"),
             func.coalesce(func.sum(Sale.subtotal), 0).label("subtotal"),
             func.coalesce(func.sum(Sale.tax_total), 0).label("tax_total"),
             func.coalesce(func.sum(Sale.total), 0).label("total"),
-        ).where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= dt_from, Sale.sold_at <= dt_to))
+        ).where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
     ).mappings().one()
 
     return SalesRangeOut(
@@ -164,22 +178,14 @@ def daily_closing(
     if date_from > date_to:
         raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor a la final")
 
-    dt_from = datetime.combine(date_from, time.min)
-    dt_to = datetime.combine(date_to, time.max)
-
+    start, end = _range_bounds(date_from, date_to)
     totals = db.execute(
         select(
             func.count(Sale.id).label("tickets"),
             func.coalesce(func.sum(Sale.subtotal), 0).label("subtotal"),
             func.coalesce(func.sum(Sale.tax_total), 0).label("tax_total"),
             func.coalesce(func.sum(Sale.total), 0).label("total"),
-        ).where(
-            and_(
-                Sale.status == DocStatus.CONFIRMED,
-                Sale.sold_at >= dt_from,
-                Sale.sold_at <= dt_to,
-            )
-        )
+        ).where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
     ).mappings().one()
 
     item_rows = db.execute(
@@ -193,13 +199,7 @@ def daily_closing(
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .join(Product, Product.id == SaleItem.product_id)
-        .where(
-            and_(
-                Sale.status == DocStatus.CONFIRMED,
-                Sale.sold_at >= dt_from,
-                Sale.sold_at <= dt_to,
-            )
-        )
+        .where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
         .group_by(SaleItem.product_id, SaleItem.product_name_snapshot, Product.sku)
         .order_by(func.sum(SaleItem.line_total).desc())
     ).mappings().all()
