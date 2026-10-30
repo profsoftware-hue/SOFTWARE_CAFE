@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -13,15 +13,23 @@ from app.db.session import get_db
 from app.models.user import User
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login", auto_error=False)
 
 
-def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)) -> User:
+def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str | None = Depends(oauth2_scheme),
+) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No autorizado",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    token = request.cookies.get(settings.auth_cookie_name) or token
+    if not token:
+        raise credentials_exception
 
     try:
         payload = decode_access_token(token)

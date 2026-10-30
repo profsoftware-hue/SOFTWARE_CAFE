@@ -62,6 +62,16 @@ def low_stock(
     warehouse_id: int | None = Query(default=None),
 ) -> list[CurrentStockOut]:
     stock = func.coalesce(InventoryBalance.quantity, 0)
+    sold = (
+        select(
+            SaleItem.product_id.label("product_id"),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.status == DocStatus.CONFIRMED)
+        .group_by(SaleItem.product_id)
+    ).subquery()
+
     stmt = (
         select(
             Product.id.label("product_id"),
@@ -79,6 +89,7 @@ def low_stock(
             Product.sale_price_excl_tax,
             Product.vat_rate,
             func.round(stock * Product.cost_price, 2).label("stock_value"),
+            func.coalesce(sold.c.sold_quantity, 0).label("sold_quantity"),
         )
         .select_from(Product)
         .join(Warehouse, true())
@@ -89,6 +100,7 @@ def low_stock(
                 InventoryBalance.warehouse_id == Warehouse.id,
             ),
         )
+        .outerjoin(sold, sold.c.product_id == Product.id)
         .where(
             Product.is_active.is_(True),
             Warehouse.is_active.is_(True),
