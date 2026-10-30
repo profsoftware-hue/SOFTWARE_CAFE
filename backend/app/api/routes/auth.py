@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from collections import defaultdict, deque
+from time import monotonic
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -14,6 +17,31 @@ from app.schemas.user import UserOut
 
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SECONDS = 300
+_login_attempts: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _login_key(request: Request, username: str) -> str:
+    client_ip = request.client.host if request.client else "unknown"
+    return f"{client_ip}:{username.strip().lower()}"
+
+
+def _check_login_rate_limit(key: str) -> None:
+    now = monotonic()
+    attempts = _login_attempts[key]
+    while attempts and now - attempts[0] > LOGIN_WINDOW_SECONDS:
+        attempts.popleft()
+    if len(attempts) >= LOGIN_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos. Espera unos minutos e intenta de nuevo.",
+        )
+
+
+def _register_login_failure(key: str) -> None:
+    _login_attempts[key].append(monotonic())
 
 
 @router.post("/bootstrap-admin", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -53,7 +81,10 @@ def bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(get_db
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+    key = _login_key(request, payload.username)
+    _check_login_rate_limit(key)
+
     user_stmt = (
         select(User)
         .options(selectinload(User.roles))
@@ -62,7 +93,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
     user = db.scalar(user_stmt)
 
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
+        _register_login_failure(key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
+
+    _login_attempts.pop(key, None)
 
     role_codes = [role.code for role in user.roles]
     token, expires_in = create_access_token(subject=str(user.id), extra_claims={"roles": role_codes})
