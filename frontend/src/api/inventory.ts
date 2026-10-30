@@ -60,6 +60,8 @@ export interface CurrentStockParams {
   search?: string
   warehouse_id?: number
   low_only?: boolean
+  date_from?: string
+  date_to?: string
 }
 
 export const listCurrentStock = async (params: CurrentStockParams): Promise<CurrentStockRow[]> => {

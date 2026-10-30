@@ -66,6 +66,7 @@ def low_stock(
         select(
             SaleItem.product_id.label("product_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+            func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.status == DocStatus.CONFIRMED)
@@ -90,6 +91,7 @@ def low_stock(
             Product.vat_rate,
             func.round(stock * Product.cost_price, 2).label("stock_value"),
             func.coalesce(sold.c.sold_quantity, 0).label("sold_quantity"),
+            func.coalesce(sold.c.sold_total, 0).label("sold_total"),
         )
         .select_from(Product)
         .join(Warehouse, true())

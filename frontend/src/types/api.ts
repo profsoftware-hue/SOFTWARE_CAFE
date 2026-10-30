@@ -217,6 +217,7 @@ export interface CurrentStockRow {
   vat_rate: string
   stock_value: string
   sold_quantity: string
+  sold_total: string
 }
 
 export interface InventoryValue {

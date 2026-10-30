@@ -137,6 +137,7 @@ class CurrentStockOut(BaseModel):
     vat_rate: Decimal
     stock_value: Decimal
     sold_quantity: Decimal
+    sold_total: Decimal = Decimal("0")
 
 
 class SalesByDateOut(BaseModel):

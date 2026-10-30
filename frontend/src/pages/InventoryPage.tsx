@@ -17,7 +17,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
 import { downloadCsv } from '@/lib/csv'
-import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
+import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
 import type { CurrentStockRow } from '@/types/api'
 
 type InventoryTab = 'products' | 'kardex'
@@ -48,6 +48,8 @@ export const InventoryPage = () => {
   const [activeTab, setActiveTab] = useState<InventoryTab>('products')
 
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState<NewProductForm>(() => emptyNewProduct())
   const [newError, setNewError] = useState<string | null>(null)
@@ -73,8 +75,13 @@ export const InventoryPage = () => {
   const warehousesQuery = useQuery({ queryKey: ['warehouses'], queryFn: listWarehouses })
 
   const stockQuery = useQuery({
-    queryKey: ['stock', search],
-    queryFn: () => listCurrentStock({ search: search.trim() || undefined }),
+    queryKey: ['stock', search, dateFrom, dateTo],
+    queryFn: () =>
+      listCurrentStock({
+        search: search.trim() || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      }),
   })
 
   const kardexQuery = useQuery({
@@ -234,12 +241,39 @@ export const InventoryPage = () => {
     addMutation.mutate({ row: addRow, quantity })
   }
 
+  const applyToday = () => {
+    const today = toISODate(new Date())
+    setDateFrom(today)
+    setDateTo(today)
+  }
+
+  const applyThisMonth = () => {
+    const now = new Date()
+    setDateFrom(toISODate(new Date(now.getFullYear(), now.getMonth(), 1)))
+    setDateTo(toISODate(now))
+  }
+
+  const clearDateRange = () => {
+    setDateFrom('')
+    setDateTo('')
+  }
+
   const exportStock = () => {
     if (!stockQuery.data || stockQuery.data.length === 0) return
 
     downloadCsv(
       'ccp_pereira_inventario.csv',
-      ['Producto', 'SKU', 'Bodega', 'Precio venta', 'Costo', 'Stock actual', 'Vendidos', 'Stock mínimo'],
+      [
+        'Producto',
+        'SKU',
+        'Bodega',
+        'Precio venta',
+        'Costo',
+        'Stock actual',
+        'Vendidos',
+        'Total vendido',
+        'Stock mínimo',
+      ],
       stockQuery.data.map((row) => [
         row.product_name,
         row.sku,
@@ -248,6 +282,7 @@ export const InventoryPage = () => {
         row.cost_price,
         row.current_stock,
         row.sold_quantity,
+        row.sold_total,
         row.min_stock,
       ]),
     )
@@ -314,12 +349,44 @@ export const InventoryPage = () => {
 
       {activeTab === 'products' ? (
         <Card>
-          <Input
-            label="Buscar producto"
-            placeholder="Nombre, SKU o código de barras"
-            value={search}
-            onChange={(event): void => setSearch(event.target.value)}
-          />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Input
+              label="Buscar producto"
+              placeholder="Nombre, SKU o código de barras"
+              value={search}
+              onChange={(event): void => setSearch(event.target.value)}
+            />
+            <Input
+              label="Vendidos desde"
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(event): void => setDateFrom(event.target.value)}
+            />
+            <Input
+              label="Vendidos hasta"
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(event): void => setDateTo(event.target.value)}
+            />
+            <div className="flex flex-wrap items-end gap-2">
+              <Button type="button" variant="secondary" onClick={applyToday}>
+                Hoy
+              </Button>
+              <Button type="button" variant="secondary" onClick={applyThisMonth}>
+                Este mes
+              </Button>
+              <Button type="button" variant="ghost" onClick={clearDateRange}>
+                Todo
+              </Button>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            {dateFrom || dateTo
+              ? 'Las columnas Vendidos y Total vendido corresponden al rango de fechas seleccionado.'
+              : 'Las columnas Vendidos y Total vendido muestran el acumulado histórico.'}
+          </p>
 
           {stockQuery.isLoading ? <Loading message="Cargando inventario..." /> : null}
 
@@ -340,6 +407,7 @@ export const InventoryPage = () => {
                 { label: 'Costo', className: 'hidden xl:table-cell' },
                 'Stock',
                 'Vendidos',
+                'Total vendido',
                 'Estado',
                 'Acciones',
               ]}
@@ -357,6 +425,7 @@ export const InventoryPage = () => {
                   <td className="hidden px-3 py-2 xl:table-cell">{formatCurrencyCOP(row.cost_price)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
+                  <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
                       {row.is_low_stock ? 'Bajo' : 'Normal'}

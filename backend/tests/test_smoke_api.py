@@ -111,6 +111,25 @@ def test_product_sale_and_closing() -> None:
     row = next(item for item in stock.json() if item["product_id"] == product_id)
     assert float(row["current_stock"]) == 9.0
     assert float(row["sold_quantity"]) == 1.0
+    assert float(row["sold_total"]) == 1190.0
+
+    filtered = client.get(
+        f"/api/v1/inventory/stock/current?date_from={today}&date_to={today}",
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    filtered_row = next(item for item in filtered.json() if item["product_id"] == product_id)
+    assert float(filtered_row["sold_quantity"]) == 1.0
+    assert float(filtered_row["sold_total"]) == 1190.0
+
+    outside_range = client.get(
+        "/api/v1/inventory/stock/current?date_from=2020-01-01&date_to=2020-01-31",
+        headers=headers,
+    )
+    assert outside_range.status_code == 200
+    outside_row = next(item for item in outside_range.json() if item["product_id"] == product_id)
+    assert float(outside_row["sold_quantity"]) == 0.0
+    assert float(outside_row["sold_total"]) == 0.0
 
 
 def test_roles_and_permissions_are_enforced() -> None:
