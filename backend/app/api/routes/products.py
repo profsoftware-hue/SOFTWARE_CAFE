@@ -466,17 +466,19 @@ def delete_product(
     db: Session = Depends(get_db),
     _: User = Depends(require_roles("ADMIN")),
 ) -> dict[str, str]:
-    """Elimina un producto y su rastro interno de inventario.
+    """Elimina un producto solo si no tiene historial de inventario ni comercial.
 
-    Se bloquea únicamente si el producto ya tiene ventas o compras registradas,
-    para no romper la trazabilidad comercial. En ese caso debe desactivarse.
+    Para conservar la trazabilidad, los productos con movimientos, ventas o compras
+    deben desactivarse en lugar de borrarse.
     """
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-    # Solo se bloquea el borrado si el producto ya participó en documentos comerciales.
     blocking = [
+        ("movimientos de inventario", select(InventoryMovement.id).where(InventoryMovement.product_id == product_id)),
+        ("saldos de inventario", select(InventoryBalance.product_id).where(InventoryBalance.product_id == product_id)),
+        ("ajustes de inventario", select(InventoryAdjustmentItem.id).where(InventoryAdjustmentItem.product_id == product_id)),
         ("ventas", select(SaleItem.id).where(SaleItem.product_id == product_id)),
         ("compras", select(PurchaseItem.id).where(PurchaseItem.product_id == product_id)),
     ]
@@ -490,27 +492,6 @@ def delete_product(
                 + ". Desactívalo en su lugar para conservar la trazabilidad."
             ),
         )
-
-    # Limpia el rastro interno de inventario (entradas/ajustes) del producto.
-    adjustment_ids = db.scalars(
-        select(InventoryAdjustmentItem.adjustment_id)
-        .where(InventoryAdjustmentItem.product_id == product_id)
-        .distinct()
-    ).all()
-
-    db.execute(delete(InventoryMovement).where(InventoryMovement.product_id == product_id))
-    db.execute(delete(InventoryBalance).where(InventoryBalance.product_id == product_id))
-    db.execute(delete(InventoryAdjustmentItem).where(InventoryAdjustmentItem.product_id == product_id))
-    db.flush()
-
-    for adjustment_id in adjustment_ids:
-        remaining = db.scalar(
-            select(func.count())
-            .select_from(InventoryAdjustmentItem)
-            .where(InventoryAdjustmentItem.adjustment_id == adjustment_id)
-        )
-        if (remaining or 0) == 0:
-            db.execute(delete(InventoryAdjustment).where(InventoryAdjustment.id == adjustment_id))
 
     image_path = product.image_path
     db.delete(product)
