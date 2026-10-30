@@ -136,6 +136,7 @@ class CurrentStockOut(BaseModel):
     sale_price_excl_tax: Decimal
     vat_rate: Decimal
     stock_value: Decimal
+    sold_quantity: Decimal
 
 
 class SalesByDateOut(BaseModel):

@@ -442,6 +442,16 @@ def current_stock(
 ) -> list[CurrentStockOut]:
     current_stock_expr = func.coalesce(InventoryBalance.quantity, Decimal("0"))
 
+    sold = (
+        select(
+            SaleItem.product_id.label("product_id"),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.status == DocStatus.CONFIRMED)
+        .group_by(SaleItem.product_id)
+    ).subquery()
+
     stmt = (
         select(
             Product.id.label("product_id"),
@@ -459,6 +469,7 @@ def current_stock(
             Product.sale_price_excl_tax,
             Product.vat_rate,
             (current_stock_expr * Product.cost_price).label("stock_value"),
+            func.coalesce(sold.c.sold_quantity, 0).label("sold_quantity"),
         )
         .select_from(Product)
         .join(Warehouse, true())
@@ -466,6 +477,7 @@ def current_stock(
             InventoryBalance,
             and_(InventoryBalance.product_id == Product.id, InventoryBalance.warehouse_id == Warehouse.id),
         )
+        .outerjoin(sold, sold.c.product_id == Product.id)
         .where(Product.is_active.is_(True), Warehouse.is_active.is_(True))
     )
 
