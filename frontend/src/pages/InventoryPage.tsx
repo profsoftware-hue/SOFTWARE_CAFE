@@ -237,7 +237,7 @@ export const InventoryPage = () => {
 
     downloadCsv(
       'ccp_pereira_inventario.csv',
-      ['Producto', 'SKU', 'Bodega', 'Precio venta', 'Costo', 'Stock actual', 'Stock mínimo'],
+      ['Producto', 'SKU', 'Bodega', 'Precio venta', 'Costo', 'Stock actual', 'Vendidos', 'Stock mínimo'],
       stockQuery.data.map((row) => [
         row.product_name,
         row.sku,
@@ -245,6 +245,7 @@ export const InventoryPage = () => {
         row.sale_price_excl_tax,
         row.cost_price,
         row.current_stock,
+        row.sold_quantity,
         row.min_stock,
       ]),
     )
@@ -334,6 +335,7 @@ export const InventoryPage = () => {
                 'Precio venta',
                 { label: 'Costo', className: 'hidden xl:table-cell' },
                 'Stock',
+                'Vendidos',
                 'Estado',
                 'Acciones',
               ]}
@@ -350,6 +352,7 @@ export const InventoryPage = () => {
                   </td>
                   <td className="hidden px-3 py-2 xl:table-cell">{formatCurrencyCOP(row.cost_price)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
                       {row.is_low_stock ? 'Bajo' : 'Normal'}

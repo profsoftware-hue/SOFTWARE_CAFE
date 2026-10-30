@@ -8,14 +8,7 @@ export const API_BASE_URL =
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30_000,
-})
-
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('ccp_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
+  withCredentials: true,
 })
 
 export const getApiErrorMessage = (error: unknown): string => {

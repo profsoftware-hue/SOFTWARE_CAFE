@@ -4,7 +4,6 @@ import type { LoginPayload } from '@/api/auth'
 import type { RoleCode, User } from '@/types/api'
 
 export interface SessionData {
-  token: string
   userId: number
   username: string
   roles: RoleCode[]

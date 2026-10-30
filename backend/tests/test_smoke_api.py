@@ -44,6 +44,10 @@ def test_bootstrap_product_sale_and_closing() -> None:
 
     headers = _login_headers()
 
+    me = client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "smokeadmin"
+
     product = client.post(
         "/api/v1/products/quick",
         json={
@@ -88,3 +92,4 @@ def test_bootstrap_product_sale_and_closing() -> None:
     assert stock.status_code == 200
     row = next(item for item in stock.json() if item["product_id"] == product_id)
     assert float(row["current_stock"]) == 9.0
+    assert float(row["sold_quantity"]) == 1.0
