@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select, true
@@ -28,7 +28,10 @@ from app.schemas.reports import (
 
 
 router = APIRouter(prefix="/reports", tags=["Reportes"])
-BOGOTA_TZ = ZoneInfo("America/Bogota")
+try:
+    BOGOTA_TZ = ZoneInfo("America/Bogota")
+except ZoneInfoNotFoundError:  # Windows sin tzdata
+    BOGOTA_TZ = timezone(timedelta(hours=-5))
 
 
 def _range_bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
