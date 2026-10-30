@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.catalogs import ProductCategory, Supplier, Warehouse
@@ -72,7 +72,7 @@ def _ensure_refs_exist(db: Session, category_id: int | None, supplier_id: int | 
 @router.get("", response_model=list[ProductOut])
 def list_products(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     search: str | None = Query(default=None),
     category_id: int | None = Query(default=None),
     supplier_id: int | None = Query(default=None),
@@ -104,7 +104,7 @@ def list_products(
 def get_product(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
 ) -> ProductOut:
     product = db.get(Product, product_id)
     if not product:
@@ -128,7 +128,7 @@ async def create_product(
     is_active: bool = Form(default=True),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     _validate_vat_rate(vat_rate)
     _ensure_refs_exist(db, category_id, supplier_id)
@@ -173,7 +173,7 @@ async def create_product(
 def create_quick_product(
     payload: QuickProductCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     """Alta rápida de inventario: nombre + cantidad, sin exigir código."""
     _validate_vat_rate(payload.vat_rate)
@@ -254,7 +254,7 @@ def add_product_stock(
     product_id: int,
     payload: StockEntryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     """Agrega unidades a un producto existente sin volver a pedir el costo."""
     product = db.get(Product, product_id)
@@ -315,7 +315,7 @@ def patch_product(
     product_id: int,
     payload: ProductPatch,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     """Edita precio, costo, nombre, IVA o SKU sin modificar el stock."""
     product = db.get(Product, product_id)
@@ -371,7 +371,7 @@ async def update_product(
     remove_image: bool = Form(default=False),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     _validate_vat_rate(vat_rate)
     _ensure_refs_exist(db, category_id, supplier_id)
@@ -432,7 +432,7 @@ async def replace_product_image(
     product_id: int,
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductOut:
     product = db.get(Product, product_id)
     if not product:
@@ -464,7 +464,7 @@ async def replace_product_image(
 def delete_product(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN")),
+    _: User = Depends(require_permissions("inventory.manage")),
 ) -> dict[str, str]:
     """Elimina un producto solo si no tiene historial de inventario ni comercial.
 

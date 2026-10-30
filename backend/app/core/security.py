@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -18,6 +19,11 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def password_fingerprint(hashed_password: str) -> str:
+    """Huella del hash actual; invalida tokens cuando cambia la contraseña."""
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()[:16]
 
 
 def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None) -> tuple[str, int]:

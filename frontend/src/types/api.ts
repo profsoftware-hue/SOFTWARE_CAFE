@@ -1,9 +1,21 @@
-export type RoleCode = 'ADMIN' | 'SELLER' | 'WAREHOUSE'
+export type RoleCode = string
+
+export interface Permission {
+  id: number
+  code: string
+  module: string
+  name: string
+  description: string | null
+}
 
 export interface Role {
   id: number
   code: RoleCode
   name: string
+  description?: string | null
+  is_system?: boolean
+  permissions?: Permission[]
+  user_count?: number
 }
 
 export interface User {
@@ -14,6 +26,7 @@ export interface User {
   is_active: boolean
   created_at: string
   roles: Role[]
+  permissions: string[]
 }
 
 export interface LoginResponse {
@@ -23,13 +36,7 @@ export interface LoginResponse {
   user_id: number
   username: string
   roles: RoleCode[]
-}
-
-export interface BootstrapAdminPayload {
-  full_name: string
-  email: string
-  username: string
-  password: string
+  permissions: string[]
 }
 
 export interface Category {

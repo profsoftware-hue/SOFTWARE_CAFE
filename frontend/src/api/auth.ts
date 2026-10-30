@@ -1,5 +1,5 @@
 import { apiClient } from '@/api/client'
-import type { BootstrapAdminPayload, LoginResponse, User } from '@/types/api'
+import type { LoginResponse, User } from '@/types/api'
 
 export interface LoginPayload {
   username: string
@@ -18,9 +18,4 @@ export const getMe = async (): Promise<User> => {
 
 export const logoutRequest = async (): Promise<void> => {
   await apiClient.post('/auth/logout')
-}
-
-export const bootstrapAdmin = async (payload: BootstrapAdminPayload): Promise<User> => {
-  const { data } = await apiClient.post<User>('/auth/bootstrap-admin', payload)
-  return data
 }

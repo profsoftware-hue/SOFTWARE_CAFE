@@ -9,7 +9,7 @@ from sqlalchemy import and_, desc, func, or_, select, true
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Customer, Supplier, Warehouse
 from app.models.company import CompanyProfile
@@ -70,7 +70,7 @@ def _build_document_out(document: Purchase | Sale | InventoryAdjustment, number_
 def create_purchase(
     payload: PurchaseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="La compra debe tener al menos un ítem")
@@ -138,7 +138,7 @@ def create_purchase(
 def pos_quote(
     payload: PosQuoteRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("sales.create")),
 ) -> PosQuoteResponse:
     if not payload.items:
         raise HTTPException(status_code=400, detail="Debes enviar al menos un ítem")
@@ -191,7 +191,7 @@ def pos_quote(
 def create_sale(
     payload: SaleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "SELLER")),
+    current_user: User = Depends(require_permissions("sales.create")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="La venta debe tener al menos un ítem")
@@ -289,7 +289,7 @@ def create_sale(
 def get_sale_receipt(
     sale_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("sales.create")),
 ) -> SaleReceiptOut:
     sale = db.get(Sale, sale_id)
     if not sale:
@@ -340,7 +340,7 @@ def get_sale_receipt(
 def create_adjustment(
     payload: InventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="El ajuste debe incluir al menos un ítem")
@@ -406,7 +406,7 @@ def create_adjustment(
 @router.get("/kardex", response_model=list[KardexOut])
 def get_kardex(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     product_id: int | None = Query(default=None),
     warehouse_id: int | None = Query(default=None),
     movement_type: str | None = Query(default=None),
@@ -435,7 +435,7 @@ def get_kardex(
 @router.get("/stock/current", response_model=list[CurrentStockOut])
 def current_stock(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     search: str | None = Query(default=None),
     warehouse_id: int | None = Query(default=None),
     low_only: bool = Query(default=False),

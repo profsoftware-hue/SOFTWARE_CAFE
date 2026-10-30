@@ -42,7 +42,9 @@ const emptyNewProduct = (): NewProductForm => ({
 
 export const InventoryPage = () => {
   const queryClient = useQueryClient()
-  const { session } = useAuth()
+  const { session, hasPermission } = useAuth()
+  const canManage = hasPermission('inventory.manage')
+  const isAdmin = session?.roles.includes('ADMIN') ?? false
   const [activeTab, setActiveTab] = useState<InventoryTab>('products')
 
   const [search, setSearch] = useState('')
@@ -271,10 +273,12 @@ export const InventoryPage = () => {
             <Button type="button" variant="secondary" onClick={exportStock}>
               Exportar CSV
             </Button>
-            <Button type="button" onClick={(): void => setNewOpen(true)}>
-              <Plus size={16} className="mr-1.5" />
-              Nuevo producto
-            </Button>
+            {canManage ? (
+              <Button type="button" onClick={(): void => setNewOpen(true)}>
+                <Plus size={16} className="mr-1.5" />
+                Nuevo producto
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -359,47 +363,51 @@ export const InventoryPage = () => {
                     </Badge>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
-                    <div className="flex flex-nowrap items-center gap-1.5">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="px-2.5 py-1.5"
-                        aria-label={`Agregar unidades a ${row.product_name}`}
-                        title="Agregar unidades"
-                        onClick={(): void => {
-                          setAddRow(row)
-                          setAddQuantity('1')
-                          setAddError(null)
-                          setMessage(null)
-                        }}
-                      >
-                        <PackagePlus size={14} />
-                        <span className="ml-1 hidden sm:inline">Agregar unidades</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="px-2.5 py-1.5"
-                        aria-label={`Editar ${row.product_name}`}
-                        title="Editar producto"
-                        onClick={(): void => openEdit(row)}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      {session?.roles.includes('ADMIN') ? (
+                    {canManage ? (
+                      <div className="flex flex-nowrap items-center gap-1.5">
                         <Button
                           type="button"
-                          variant="danger"
+                          variant="secondary"
                           className="px-2.5 py-1.5"
-                          aria-label={`Eliminar ${row.product_name}`}
-                          title="Eliminar producto"
-                          disabled={deleteMutation.isPending}
-                          onClick={(): void => handleDelete(row)}
+                          aria-label={`Agregar unidades a ${row.product_name}`}
+                          title="Agregar unidades"
+                          onClick={(): void => {
+                            setAddRow(row)
+                            setAddQuantity('1')
+                            setAddError(null)
+                            setMessage(null)
+                          }}
                         >
-                          <Trash2 size={14} />
+                          <PackagePlus size={14} />
+                          <span className="ml-1 hidden sm:inline">Agregar unidades</span>
                         </Button>
-                      ) : null}
-                    </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="px-2.5 py-1.5"
+                          aria-label={`Editar ${row.product_name}`}
+                          title="Editar producto"
+                          onClick={(): void => openEdit(row)}
+                        >
+                          <Pencil size={14} />
+                        </Button>
+                        {isAdmin ? (
+                          <Button
+                            type="button"
+                            variant="danger"
+                            className="px-2.5 py-1.5"
+                            aria-label={`Eliminar ${row.product_name}`}
+                            title="Eliminar producto"
+                            disabled={deleteMutation.isPending}
+                            onClick={(): void => handleDelete(row)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">Solo lectura</span>
+                    )}
                   </td>
                 </tr>
               ))}

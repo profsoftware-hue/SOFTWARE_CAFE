@@ -8,19 +8,46 @@ if not os.getenv("TEST_DATABASE_URL"):
     pytest.skip("Requiere PostgreSQL de pruebas (TEST_DATABASE_URL)", allow_module_level=True)
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from app.core.security import hash_password
+from app.db.session import SessionLocal
 from app.main import app
+from app.models.user import Role, User
 
 
 client = TestClient(app)
 
 
-def _login_headers() -> dict[str, str]:
+def _ensure_admin() -> None:
+    with SessionLocal() as db:
+        existing = db.scalar(select(User).where(User.username == "smokeadmin"))
+        if existing is not None:
+            return
+
+        admin_role = db.scalar(select(Role).where(Role.code == "ADMIN"))
+        assert admin_role is not None, "La migración debe crear el rol ADMIN"
+
+        user = User(
+            full_name="Smoke Admin",
+            email="smoke@example.com",
+            username="smokeadmin",
+            password_hash=hash_password("Smoke12345*"),
+            is_active=True,
+        )
+        user.roles = [admin_role]
+        db.add(user)
+        db.commit()
+
+
+def _login_headers(username: str = "smokeadmin", password: str = "Smoke12345*") -> dict[str, str]:
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "smokeadmin", "password": "Smoke12345*"},
+        json={"username": username, "password": password},
     )
     assert response.status_code == 200, response.text
+    # El TestClient comparte cookies; se limpian para que cada usuario use su Bearer.
+    client.cookies.clear()
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
@@ -30,23 +57,14 @@ def test_health_database() -> None:
     assert response.json()["status"] == "ok"
 
 
-def test_bootstrap_product_sale_and_closing() -> None:
-    bootstrap = client.post(
-        "/api/v1/auth/bootstrap-admin",
-        json={
-            "full_name": "Smoke Admin",
-            "email": "smoke@example.com",
-            "username": "smokeadmin",
-            "password": "Smoke12345*",
-        },
-    )
-    assert bootstrap.status_code in (201, 400), bootstrap.text
-
+def test_product_sale_and_closing() -> None:
+    _ensure_admin()
     headers = _login_headers()
 
-    me = client.get("/api/v1/auth/me")
+    me = client.get("/api/v1/auth/me", headers=headers)
     assert me.status_code == 200
     assert me.json()["username"] == "smokeadmin"
+    assert "users.manage" in me.json()["permissions"]
 
     product = client.post(
         "/api/v1/products/quick",
@@ -93,3 +111,183 @@ def test_bootstrap_product_sale_and_closing() -> None:
     row = next(item for item in stock.json() if item["product_id"] == product_id)
     assert float(row["current_stock"]) == 9.0
     assert float(row["sold_quantity"]) == 1.0
+
+
+def test_roles_and_permissions_are_enforced() -> None:
+    _ensure_admin()
+    admin_headers = _login_headers()
+
+    roles = client.get("/api/v1/roles", headers=admin_headers)
+    assert roles.status_code == 200, roles.text
+    role = next((item for item in roles.json() if item["code"] == "REPORTS_ONLY"), None)
+    if role is None:
+        created = client.post(
+            "/api/v1/roles",
+            json={
+                "code": "REPORTS_ONLY",
+                "name": "Solo reportes",
+                "description": "Rol de prueba para validar permisos",
+                "permission_codes": ["reports.view"],
+            },
+            headers=admin_headers,
+        )
+        assert created.status_code == 201, created.text
+
+    user = client.post(
+        "/api/v1/users",
+        json={
+            "full_name": "Usuario Reportes",
+            "email": "reportes@example.com",
+            "username": "reportsuser",
+            "password": "Reports12345*",
+            "role_codes": ["REPORTS_ONLY"],
+        },
+        headers=admin_headers,
+    )
+    assert user.status_code in (201, 400), user.text
+
+    user_headers = _login_headers("reportsuser", "Reports12345*")
+
+    allowed = client.get("/api/v1/reports/inventory-value", headers=user_headers)
+    assert allowed.status_code == 200, allowed.text
+
+    denied_users = client.get("/api/v1/users", headers=user_headers)
+    assert denied_users.status_code == 403
+
+    denied_product = client.post(
+        "/api/v1/products/quick",
+        json={
+            "name": "Producto no permitido",
+            "quantity": 1,
+            "cost_price": 100,
+            "sale_price_excl_tax": 100,
+        },
+        headers=user_headers,
+    )
+    assert denied_product.status_code == 403
+
+
+def test_admin_guard_and_permission_hierarchy() -> None:
+    _ensure_admin()
+    admin_headers = _login_headers()
+    admin = client.get("/api/v1/auth/me", headers=admin_headers).json()
+    admin_id = admin["id"]
+
+    self_deactivate = client.put(
+        f"/api/v1/users/{admin_id}",
+        json={"is_active": False},
+        headers=admin_headers,
+    )
+    assert self_deactivate.status_code == 400
+
+    users = client.get("/api/v1/users?limit=200", headers=admin_headers).json()
+    active_admins = [
+        item
+        for item in users
+        if item["is_active"] and any(role["code"] == "ADMIN" for role in item["roles"])
+    ]
+    if len(active_admins) == 1:
+        self_demote = client.put(
+            f"/api/v1/users/{admin_id}",
+            json={"role_codes": ["SELLER"]},
+            headers=admin_headers,
+        )
+        assert self_demote.status_code == 400
+
+    changed_password = client.put(
+        f"/api/v1/users/{admin_id}",
+        json={"password": "SmokeChanged123*"},
+        headers=admin_headers,
+    )
+    assert changed_password.status_code == 200
+    old_token = client.get("/api/v1/auth/me", headers=admin_headers)
+    assert old_token.status_code == 401
+
+    admin_headers = _login_headers(password="SmokeChanged123*")
+    restored_password = client.put(
+        f"/api/v1/users/{admin_id}",
+        json={"password": "Smoke12345*"},
+        headers=admin_headers,
+    )
+    assert restored_password.status_code == 200
+    admin_headers = _login_headers()
+
+    roles = client.get("/api/v1/roles", headers=admin_headers).json()
+    manager_role = next((item for item in roles if item["code"] == "USER_MANAGER"), None)
+    if manager_role is None:
+        created_role = client.post(
+            "/api/v1/roles",
+            json={
+                "code": "USER_MANAGER",
+                "name": "Gestor de usuarios",
+                "permission_codes": ["users.view", "users.manage", "roles.view", "roles.manage"],
+            },
+            headers=admin_headers,
+        )
+        assert created_role.status_code in (201, 400), created_role.text
+
+    manager_user = client.post(
+        "/api/v1/users",
+        json={
+            "full_name": "Gestor Usuarios",
+            "email": "manager@example.com",
+            "username": "manageruser",
+            "password": "Manager12345*",
+            "role_codes": ["USER_MANAGER"],
+        },
+        headers=admin_headers,
+    )
+    assert manager_user.status_code in (201, 400), manager_user.text
+
+    manager_headers = _login_headers("manageruser", "Manager12345*")
+    escalated = client.post(
+        "/api/v1/users",
+        json={
+            "full_name": "Admin infiltrado",
+            "email": "infiltrado@example.com",
+            "username": "infiltrado",
+            "password": "Infiltrado123*",
+            "role_codes": ["ADMIN"],
+        },
+        headers=manager_headers,
+    )
+    assert escalated.status_code == 403
+
+    touching_admin = client.put(
+        f"/api/v1/users/{admin_id}",
+        json={"full_name": "Admin cambiado"},
+        headers=manager_headers,
+    )
+    assert touching_admin.status_code == 403
+
+    inv_role = next((item for item in roles if item["code"] == "INV_MANAGER"), None)
+    if inv_role is None:
+        created_inv = client.post(
+            "/api/v1/roles",
+            json={
+                "code": "INV_MANAGER",
+                "name": "Gestor de inventario",
+                "permission_codes": ["inventory.manage"],
+            },
+            headers=admin_headers,
+        )
+        assert created_inv.status_code in (201, 400), created_inv.text
+
+    inv_user = client.post(
+        "/api/v1/users",
+        json={
+            "full_name": "Gestor Inventario",
+            "email": "invmanager@example.com",
+            "username": "invmanager",
+            "password": "Inventory123*",
+            "role_codes": ["INV_MANAGER"],
+        },
+        headers=admin_headers,
+    )
+    assert inv_user.status_code in (201, 400), inv_user.text
+
+    inv_headers = _login_headers("invmanager", "Inventory123*")
+    products = client.get("/api/v1/products?limit=1", headers=inv_headers)
+    reports = client.get("/api/v1/reports/inventory-value", headers=inv_headers)
+    assert products.status_code == 200
+    assert reports.status_code == 403

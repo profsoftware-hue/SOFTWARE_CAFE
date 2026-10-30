@@ -1,9 +1,7 @@
-import { ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import logoCcp from '@/assets/logo_ccp.svg'
-import { bootstrapAdmin } from '@/api/auth'
 import { getApiErrorMessage } from '@/api/client'
 import { useAuth } from '@/auth/context'
 import { Button } from '@/components/ui/Button'
@@ -29,17 +27,6 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [showBootstrap, setShowBootstrap] = useState(false)
-  const [bootstrapLoading, setBootstrapLoading] = useState(false)
-  const [bootstrapMessage, setBootstrapMessage] = useState<string | null>(null)
-  const [bootstrapError, setBootstrapError] = useState<string | null>(null)
-  const [bootstrapForm, setBootstrapForm] = useState({
-    full_name: '',
-    email: '',
-    username: '',
-    password: '',
-  })
-
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
@@ -52,28 +39,6 @@ export const LoginPage = () => {
       setError(getApiErrorMessage(unknownError))
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleBootstrap = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setBootstrapMessage(null)
-    setBootstrapError(null)
-    setBootstrapLoading(true)
-
-    try {
-      await bootstrapAdmin(bootstrapForm)
-      setBootstrapMessage('Administrador inicial creado correctamente. Ya puedes iniciar sesión.')
-      setBootstrapForm({
-        full_name: '',
-        email: '',
-        username: '',
-        password: '',
-      })
-    } catch (unknownError) {
-      setBootstrapError(getApiErrorMessage(unknownError))
-    } finally {
-      setBootstrapLoading(false)
     }
   }
 
@@ -146,75 +111,9 @@ export const LoginPage = () => {
             </form>
           </Card>
 
-          <Card
-            title="Primer arranque"
-            subtitle="Crear usuario administrador inicial"
-            actions={
-              <Button type="button" variant="secondary" onClick={(): void => setShowBootstrap((value) => !value)}>
-                {showBootstrap ? 'Ocultar' : 'Mostrar'}
-              </Button>
-            }
-          >
-            {showBootstrap ? (
-              <form className="space-y-3" onSubmit={handleBootstrap}>
-                <Input
-                  label="Nombre completo"
-                  value={bootstrapForm.full_name}
-                  onChange={(event): void =>
-                    setBootstrapForm((prev) => ({ ...prev, full_name: event.target.value }))
-                  }
-                  required
-                />
-                <Input
-                  label="Correo"
-                  type="email"
-                  value={bootstrapForm.email}
-                  onChange={(event): void =>
-                    setBootstrapForm((prev) => ({ ...prev, email: event.target.value }))
-                  }
-                  required
-                />
-                <Input
-                  label="Usuario"
-                  value={bootstrapForm.username}
-                  onChange={(event): void =>
-                    setBootstrapForm((prev) => ({ ...prev, username: event.target.value }))
-                  }
-                  required
-                />
-                <Input
-                  label="Contraseña"
-                  type="password"
-                  value={bootstrapForm.password}
-                  onChange={(event): void =>
-                    setBootstrapForm((prev) => ({ ...prev, password: event.target.value }))
-                  }
-                  required
-                />
-
-                {bootstrapMessage ? (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                    {bootstrapMessage}
-                  </div>
-                ) : null}
-
-                {bootstrapError ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                    {bootstrapError}
-                  </div>
-                ) : null}
-
-                <Button type="submit" loading={bootstrapLoading} variant="secondary" className="w-full">
-                  <ShieldCheck size={16} className="mr-1.5" />
-                  Crear administrador
-                </Button>
-              </form>
-            ) : (
-              <p className="text-sm text-slate-600">
-                Si la base está recién configurada, habilita este bloque para crear el primer usuario admin.
-              </p>
-            )}
-          </Card>
+          <p className="px-2 text-center text-xs text-slate-500">
+            Los usuarios se crean desde el módulo de seguridad por un administrador.
+          </p>
         </div>
       </div>
     </div>

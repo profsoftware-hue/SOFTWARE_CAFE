@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select, true
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Warehouse
 from app.models.company import CompanyProfile
@@ -45,7 +45,7 @@ def _range_bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
 @router.get("/inventory-value", response_model=InventoryValueOut)
 def inventory_value(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> InventoryValueOut:
     total = db.scalar(
         select(func.coalesce(func.sum(InventoryBalance.quantity * Product.cost_price), 0))
@@ -58,7 +58,7 @@ def inventory_value(
 @router.get("/low-stock", response_model=list[CurrentStockOut])
 def low_stock(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
     warehouse_id: int | None = Query(default=None),
 ) -> list[CurrentStockOut]:
     stock = func.coalesce(InventoryBalance.quantity, 0)
@@ -119,7 +119,7 @@ def low_stock(
 @router.get("/top-products", response_model=list[TopProductOut])
 def top_products(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
@@ -161,7 +161,7 @@ def sales_range(
     date_from: date,
     date_to: date,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> SalesRangeOut:
     start, end = _range_bounds(date_from, date_to)
     row = db.execute(
@@ -188,7 +188,7 @@ def daily_closing(
     date_from: date,
     date_to: date,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> DailyClosingOut:
     if date_from > date_to:
         raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor a la final")

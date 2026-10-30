@@ -11,6 +11,22 @@ export const apiClient = axios.create({
   withCredentials: true,
 })
 
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error: unknown) => {
+    if (isAxiosError(error) && error.response?.status === 401) {
+      const requestUrl = error.config?.url ?? ''
+      if (!requestUrl.includes('/auth/login')) {
+        localStorage.removeItem('ccp_auth_session')
+        if (window.location.pathname !== '/login') {
+          window.location.assign('/login')
+        }
+      }
+    }
+    return Promise.reject(error)
+  },
+)
+
 export const getApiErrorMessage = (error: unknown): string => {
   if (isAxiosError(error)) {
     const detail = error.response?.data?.detail

@@ -1,12 +1,12 @@
 import { apiClient } from '@/api/client'
-import type { RoleCode, User } from '@/types/api'
+import type { User } from '@/types/api'
 
 export interface UserCreatePayload {
   full_name: string
   email: string
   username: string
   password: string
-  role_codes: RoleCode[]
+  role_codes: string[]
 }
 
 export interface UserUpdatePayload {
@@ -15,7 +15,7 @@ export interface UserUpdatePayload {
   username?: string
   password?: string
   is_active?: boolean
-  role_codes?: RoleCode[]
+  role_codes?: string[]
 }
 
 export const listUsers = async (): Promise<User[]> => {

@@ -11,7 +11,8 @@ from app.models import *  # noqa: F403,F401
 
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# ConfigParser interpola '%', por eso se escapa la URL (las contraseñas pueden traer %).
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

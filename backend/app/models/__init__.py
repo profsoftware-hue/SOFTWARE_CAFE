@@ -9,11 +9,13 @@ from app.models.inventory import (
 from app.models.product import Product
 from app.models.purchase import Purchase, PurchaseItem
 from app.models.sale import Sale, SaleItem
-from app.models.user import RefreshToken, Role, User, UserRole
+from app.models.user import Permission, RefreshToken, Role, RolePermission, User, UserRole
 
 __all__ = [
     "CompanyProfile",
+    "Permission",
     "Role",
+    "RolePermission",
     "User",
     "UserRole",
     "RefreshToken",

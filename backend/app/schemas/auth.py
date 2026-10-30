@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -15,10 +15,4 @@ class TokenResponse(BaseModel):
     user_id: int
     username: str
     roles: list[str]
-
-
-class BootstrapAdminRequest(BaseModel):
-    full_name: str = Field(..., min_length=3, max_length=120)
-    email: EmailStr
-    username: str = Field(..., min_length=3, max_length=60)
-    password: str = Field(..., min_length=8, max_length=128)
+    permissions: list[str] = Field(default_factory=list)
