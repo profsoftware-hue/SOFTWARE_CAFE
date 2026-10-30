@@ -52,3 +52,15 @@ alembic upgrade head
 ```
 
 La migración base crea el esquema únicamente si `ccp.roles` no existe.
+
+## 6. Usuarios, roles y permisos
+
+- No existe registro público ni endpoint de bootstrap de administradores.
+- El primer administrador se crea por consola con `backend/scripts/create_admin.py`.
+- Los permisos se asignan a roles; los usuarios heredan la unión de permisos de sus roles.
+- El rol `ADMIN` conserva acceso total y no puede perder permisos.
+- Los roles del sistema no se pueden eliminar.
+- Solo usuarios con `users.manage` o `roles.manage` pueden modificar usuarios o roles.
+- Un gestor que no sea `ADMIN` no puede asignar el rol `ADMIN`, modificar cuentas administradoras ni otorgar permisos que él mismo no tenga.
+- Los cambios de contraseña invalidan los tokens emitidos anteriormente para ese usuario.
+- La jerarquía `*.manage` incluye el permiso de lectura `*.view` correspondiente.

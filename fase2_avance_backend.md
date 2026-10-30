@@ -6,8 +6,8 @@ Estado: **completada**
 
 1. **Backend FastAPI** con estructura modular (`app/api`, `app/models`, `app/schemas`, `app/services`).
 2. **Conexión PostgreSQL** vía SQLAlchemy 2.x (usa `.env` / `../.env`).
-3. **Autenticación JWT** (`/auth/login`, `/auth/me`) + bootstrap de primer admin (`/auth/bootstrap-admin`).
-4. **Usuarios y roles** (listado, creación, actualización) con control por permisos.
+3. **Autenticación JWT en cookie HttpOnly** (`/auth/login`, `/auth/me`) y creación del primer admin por script.
+4. **Usuarios, roles y permisos (RBAC)**: catálogo de permisos, roles del sistema y personalizados, asignación múltiple de roles y control de acceso por permiso.
 5. **Catálogos**: categorías, proveedores, clientes, bodegas.
 6. **Productos**:
    - CRUD base

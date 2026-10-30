@@ -34,6 +34,26 @@ npm install
 npm run dev
 ```
 
+## Pruebas
+
+Backend (unitarias; las de integración se omiten sin `TEST_DATABASE_URL`):
+
+```bash
+cd backend
+python -m pytest tests -q
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run test
+npm run build
+npm run lint
+```
+
+La CI ejecuta pruebas unitarias, integración PostgreSQL y build/lint del frontend en cada push a `main`, `desarrollo` o `produccion`.
+
 ## Ramas
 
 - `main`: versión estable.

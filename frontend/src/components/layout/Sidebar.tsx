@@ -12,12 +12,11 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ mobileOpen, onCloseMobile }: SidebarProps) => {
-  const { session, logout } = useAuth()
+  const { session, logout, hasPermission } = useAuth()
 
   const visibleItems = navigationItems.filter((item) => {
-    if (!item.roles || item.roles.length === 0) return true
-    if (!session) return false
-    return item.roles.some((role) => session.roles.includes(role))
+    if (!item.permissions || item.permissions.length === 0) return true
+    return item.permissions.some((permission) => hasPermission(permission))
   })
 
   return (

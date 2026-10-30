@@ -1,9 +1,23 @@
-export type RoleCode = 'ADMIN' | 'SELLER' | 'WAREHOUSE'
+export type RoleCode = string
+
+export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'QR' | 'MIXED' | 'CREDIT'
+
+export interface Permission {
+  id: number
+  code: string
+  module: string
+  name: string
+  description: string | null
+}
 
 export interface Role {
   id: number
   code: RoleCode
   name: string
+  description?: string | null
+  is_system?: boolean
+  permissions?: Permission[]
+  user_count?: number
 }
 
 export interface User {
@@ -14,6 +28,7 @@ export interface User {
   is_active: boolean
   created_at: string
   roles: Role[]
+  permissions: string[]
 }
 
 export interface LoginResponse {
@@ -23,13 +38,7 @@ export interface LoginResponse {
   user_id: number
   username: string
   roles: RoleCode[]
-}
-
-export interface BootstrapAdminPayload {
-  full_name: string
-  email: string
-  username: string
-  password: string
+  permissions: string[]
 }
 
 export interface Category {
@@ -131,7 +140,7 @@ export interface CreateSalePayload {
   warehouse_id: number
   customer_id?: number | null
   sold_at?: string | null
-  payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'MIXED' | 'CREDIT'
+  payment_method: PaymentMethod
   note?: string | null
   items: SaleItemInput[]
   confirm: boolean
@@ -210,6 +219,7 @@ export interface CurrentStockRow {
   vat_rate: string
   stock_value: string
   sold_quantity: string
+  sold_total: string
 }
 
 export interface InventoryValue {
@@ -251,7 +261,7 @@ export interface SaleReceipt {
   sale_number: string
   sold_at: string
   status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
-  payment_method: string
+  payment_method: PaymentMethod
   customer_name: string | null
   warehouse_name: string
   seller_name: string | null
@@ -274,6 +284,14 @@ export interface DailyClosingItem {
   total: string
 }
 
+export interface DailyClosingPayment {
+  payment_method: PaymentMethod
+  tickets: number
+  subtotal: string
+  tax_total: string
+  total: string
+}
+
 export interface DailyClosing {
   date_from: string
   date_to: string
@@ -282,5 +300,6 @@ export interface DailyClosing {
   tax_total: string
   total: string
   company_name: string
+  payment_methods: DailyClosingPayment[]
   items: DailyClosingItem[]
 }

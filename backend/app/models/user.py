@@ -16,6 +16,34 @@ class UserRole(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey("ccp.roles.id", ondelete="RESTRICT"), primary_key=True)
 
 
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    __table_args__ = {"schema": "ccp"}
+
+    role_id: Mapped[int] = mapped_column(ForeignKey("ccp.roles.id", ondelete="CASCADE"), primary_key=True)
+    permission_id: Mapped[int] = mapped_column(
+        ForeignKey("ccp.permissions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    __table_args__ = {"schema": "ccp"}
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    module: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    roles: Mapped[list[Role]] = relationship(
+        secondary=lambda: RolePermission.__table__,
+        back_populates="permissions",
+    )
+
+
 class Role(Base):
     __tablename__ = "roles"
     __table_args__ = {"schema": "ccp"}
@@ -24,10 +52,15 @@ class Role(Base):
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
     description: Mapped[str | None] = mapped_column(Text())
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     users: Mapped[list[User]] = relationship(
         secondary=lambda: UserRole.__table__,
+        back_populates="roles",
+    )
+    permissions: Mapped[list[Permission]] = relationship(
+        secondary=lambda: RolePermission.__table__,
         back_populates="roles",
         lazy="selectin",
     )
@@ -52,6 +85,11 @@ class User(Base):
         lazy="selectin",
     )
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def permissions(self) -> list[str]:
+        """Permisos efectivos heredados de todos los roles del usuario."""
+        return sorted({permission.code for role in self.roles for permission in role.permissions})
 
 
 class RefreshToken(Base):

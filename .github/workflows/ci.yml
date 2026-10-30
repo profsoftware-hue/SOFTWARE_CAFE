@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend:
-    name: Backend (compilación y pruebas)
+    name: Backend (compilación y pruebas unitarias)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
         run: pytest backend/tests -q
 
   frontend:
-    name: Frontend (build y lint)
+    name: Frontend (build, lint y pruebas)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,6 +48,8 @@ jobs:
         run: npm run build
       - name: Lint
         run: npm run lint
+      - name: Pruebas unitarias
+        run: npm run test
 
   integration:
     name: Integración PostgreSQL (migración + venta + cierre)
@@ -92,7 +94,7 @@ jobs:
       - name: Migrar base de datos
         working-directory: backend
         run: alembic upgrade head
-      - name: Pruebas de integración
+      - name: Pruebas unitarias y de integración
         env:
           PYTHONPATH: backend
-        run: pytest backend/tests/test_smoke_api.py -q
+        run: pytest backend/tests -q

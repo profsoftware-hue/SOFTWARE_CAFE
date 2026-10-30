@@ -2,6 +2,7 @@ import { Printer, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
+import { PAYMENT_METHOD_LABELS } from '@/lib/payments'
 import type { DailyClosing } from '@/types/api'
 
 interface DailyClosingModalProps {
@@ -48,6 +49,17 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
       )
       .join('')
 
+    const paymentRows = data.payment_methods
+      .map(
+        (payment) => `
+          <div>
+            <span>${escapeHtml(PAYMENT_METHOD_LABELS[payment.payment_method] ?? payment.payment_method)} (${payment.tickets})</span>
+            <span>${formatCurrencyCOP(payment.total)}</span>
+          </div>
+        `,
+      )
+      .join('')
+
     const html = `<!doctype html>
 <html lang="es">
 <head>
@@ -73,6 +85,9 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
   .totals { margin-top: 5px; font-size: 10px; }
   .totals div { display: flex; justify-content: space-between; padding: 1px 0; }
   .totals .total { font-size: 13px; font-weight: bold; border-top: 1px solid #333; margin-top: 2px; padding-top: 3px; }
+  .section-title { margin: 7px 0 2px; border-top: 1px dashed #555; padding-top: 4px; text-align: center; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+  .payments { font-size: 9.5px; }
+  .payments div { display: flex; justify-content: space-between; padding: 1px 0; }
   .footer { margin-top: 8px; text-align: center; font-size: 8.5px; color: #333; border-top: 1px dashed #555; padding-top: 5px; }
 </style>
 </head>
@@ -100,6 +115,9 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
     <div><span>IVA</span><span>${formatCurrencyCOP(data.tax_total)}</span></div>
     <div class="total"><span>TOTAL VENDIDO</span><span>${formatCurrencyCOP(data.total)}</span></div>
   </div>
+
+  <div class="section-title">Medios de pago</div>
+  <div class="payments">${paymentRows}</div>
 
   <div class="footer">
     Resumen generado por CCP Pereira<br/>
@@ -202,6 +220,23 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
               <div className="flex justify-between border-t border-slate-300 pt-1 text-sm font-bold text-slate-900">
                 <span>Total vendido</span>
                 <span>{formatCurrencyCOP(data.total)}</span>
+              </div>
+            </div>
+
+            <div className="mt-2 border-t border-dashed border-slate-300 pt-2">
+              <p className="text-center text-[9px] font-bold uppercase tracking-wide text-slate-600">
+                Medios de pago
+              </p>
+              <div className="mt-1 space-y-0.5 text-[11px] text-slate-700">
+                {data.payment_methods.map((payment) => (
+                  <div key={payment.payment_method} className="flex justify-between gap-2">
+                    <span>
+                      {PAYMENT_METHOD_LABELS[payment.payment_method] ?? payment.payment_method} (
+                      {payment.tickets})
+                    </span>
+                    <span>{formatCurrencyCOP(payment.total)}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

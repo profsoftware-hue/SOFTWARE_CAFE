@@ -31,6 +31,17 @@ Variables mínimas:
 - `SECRET_KEY`
 - `UPLOAD_DIR`
 
+## Primer administrador
+
+El sistema no expone creación pública de usuarios. Después de migrar la base, crea el primer administrador por consola:
+
+```bash
+cd backend
+python scripts/create_admin.py --username admin --email admin@ccp.local --name "Administrador CCP"
+```
+
+El script solicita la contraseña de forma interactiva.
+
 ## Ejecutar API
 
 ```bash
@@ -44,8 +55,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Módulos implementados
 
-- Auth JWT
-- Usuarios y roles
+- Auth JWT en cookie HttpOnly
+- Usuarios, roles y permisos (RBAC)
 - Catálogos (categorías, proveedores, clientes, bodegas)
 - Productos con carga/reemplazo de imagen y alta rápida (nombre + cantidad, SKU automático)
 - Compras, ventas POS, ajustes, kardex y stock actual

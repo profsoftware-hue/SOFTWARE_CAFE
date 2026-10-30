@@ -7,13 +7,16 @@ export interface SessionData {
   userId: number
   username: string
   roles: RoleCode[]
+  permissions: string[]
   expiresAt: number
 }
 
 export interface AuthContextValue {
   session: SessionData | null
   profile: User | null
+  permissions: string[]
   isAuthenticated: boolean
+  hasPermission: (permission: string) => boolean
   login: (payload: LoginPayload) => Promise<void>
   refreshProfile: () => Promise<void>
   logout: () => void

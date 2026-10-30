@@ -9,8 +9,8 @@ import { LoginPage } from '@/pages/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { PosPage } from '@/pages/PosPage'
 import { ReportsPage } from '@/pages/ReportsPage'
+import { SecurityPage } from '@/pages/security/SecurityPage'
 import { SettingsPage } from '@/pages/SettingsPage'
-import { UsersPage } from '@/pages/UsersPage'
 
 const RootRedirect = () => {
   const { isAuthenticated } = useAuth()
@@ -31,7 +31,14 @@ const App = () => {
         }
       >
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/inventario" element={<InventoryPage />} />
+        <Route
+          path="/inventario"
+          element={
+            <ProtectedRoute allowPermissions={['inventory.view']}>
+              <InventoryPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/productos" element={<Navigate to="/inventario" replace />} />
         <Route path="/entradas" element={<Navigate to="/inventario" replace />} />
         <Route path="/salidas" element={<Navigate to="/inventario" replace />} />
@@ -39,21 +46,35 @@ const App = () => {
         <Route
           path="/pos"
           element={
-            <ProtectedRoute allowRoles={['ADMIN', 'SELLER']}>
+            <ProtectedRoute allowPermissions={['sales.create']}>
               <PosPage />
             </ProtectedRoute>
           }
         />
-        <Route path="/reportes" element={<ReportsPage />} />
         <Route
-          path="/usuarios"
+          path="/reportes"
           element={
-            <ProtectedRoute allowRoles={['ADMIN']}>
-              <UsersPage />
+            <ProtectedRoute allowPermissions={['reports.view']}>
+              <ReportsPage />
             </ProtectedRoute>
           }
         />
-        <Route path="/configuracion" element={<SettingsPage />} />
+        <Route
+          path="/usuarios"
+          element={
+            <ProtectedRoute allowPermissions={['users.view', 'roles.view']}>
+              <SecurityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/configuracion"
+          element={
+            <ProtectedRoute allowPermissions={['settings.view']}>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, desc, func, or_, select, true
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Customer, Supplier, Warehouse
 from app.models.company import CompanyProfile
@@ -38,6 +39,20 @@ from app.services.numbering import generate_document_number
 router = APIRouter(prefix="/inventory", tags=["Inventario"])
 
 ALLOWED_VAT_RATES = {Decimal("0"), Decimal("0.05"), Decimal("0.19")}
+
+try:
+    BOGOTA_TZ = ZoneInfo("America/Bogota")
+except ZoneInfoNotFoundError:  # Windows sin tzdata
+    BOGOTA_TZ = timezone(timedelta(hours=-5))
+
+
+def _bogota_range_bounds(date_from: date | None, date_to: date | None) -> tuple[datetime | None, datetime | None]:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor que la fecha final")
+
+    start = datetime.combine(date_from, time.min, tzinfo=BOGOTA_TZ) if date_from else None
+    end = datetime.combine(date_to, time.max, tzinfo=BOGOTA_TZ) if date_to else None
+    return start, end
 
 
 def _extract_db_error(exc: Exception) -> str:
@@ -70,7 +85,7 @@ def _build_document_out(document: Purchase | Sale | InventoryAdjustment, number_
 def create_purchase(
     payload: PurchaseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="La compra debe tener al menos un ítem")
@@ -138,7 +153,7 @@ def create_purchase(
 def pos_quote(
     payload: PosQuoteRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("sales.create")),
 ) -> PosQuoteResponse:
     if not payload.items:
         raise HTTPException(status_code=400, detail="Debes enviar al menos un ítem")
@@ -191,7 +206,7 @@ def pos_quote(
 def create_sale(
     payload: SaleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "SELLER")),
+    current_user: User = Depends(require_permissions("sales.create")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="La venta debe tener al menos un ítem")
@@ -289,7 +304,7 @@ def create_sale(
 def get_sale_receipt(
     sale_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("sales.create")),
 ) -> SaleReceiptOut:
     sale = db.get(Sale, sale_id)
     if not sale:
@@ -340,7 +355,7 @@ def get_sale_receipt(
 def create_adjustment(
     payload: InventoryAdjustmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> InventoryDocumentOut:
     if not payload.items:
         raise HTTPException(status_code=400, detail="El ajuste debe incluir al menos un ítem")
@@ -406,7 +421,7 @@ def create_adjustment(
 @router.get("/kardex", response_model=list[KardexOut])
 def get_kardex(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     product_id: int | None = Query(default=None),
     warehouse_id: int | None = Query(default=None),
     movement_type: str | None = Query(default=None),
@@ -435,22 +450,31 @@ def get_kardex(
 @router.get("/stock/current", response_model=list[CurrentStockOut])
 def current_stock(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     search: str | None = Query(default=None),
     warehouse_id: int | None = Query(default=None),
     low_only: bool = Query(default=False),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
 ) -> list[CurrentStockOut]:
     current_stock_expr = func.coalesce(InventoryBalance.quantity, Decimal("0"))
+    sold_from, sold_to = _bogota_range_bounds(date_from, date_to)
 
-    sold = (
+    sold_stmt = (
         select(
             SaleItem.product_id.label("product_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+            func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.status == DocStatus.CONFIRMED)
-        .group_by(SaleItem.product_id)
-    ).subquery()
+    )
+    if sold_from is not None:
+        sold_stmt = sold_stmt.where(Sale.sold_at >= sold_from)
+    if sold_to is not None:
+        sold_stmt = sold_stmt.where(Sale.sold_at <= sold_to)
+
+    sold = sold_stmt.group_by(SaleItem.product_id).subquery()
 
     stmt = (
         select(
@@ -470,6 +494,7 @@ def current_stock(
             Product.vat_rate,
             (current_stock_expr * Product.cost_price).label("stock_value"),
             func.coalesce(sold.c.sold_quantity, 0).label("sold_quantity"),
+            func.coalesce(sold.c.sold_total, 0).label("sold_total"),
         )
         .select_from(Product)
         .join(Warehouse, true())

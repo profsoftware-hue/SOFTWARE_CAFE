@@ -8,11 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select, true
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Warehouse
 from app.models.company import CompanyProfile
-from app.models.enums import DocStatus
+from app.models.enums import DocStatus, PaymentMethod
 from app.models.inventory import InventoryBalance
 from app.models.product import Product
 from app.models.sale import Sale, SaleItem
@@ -21,6 +21,7 @@ from app.schemas.inventory import CurrentStockOut
 from app.schemas.reports import (
     DailyClosingItemOut,
     DailyClosingOut,
+    DailyClosingPaymentOut,
     InventoryValueOut,
     SalesRangeOut,
     TopProductOut,
@@ -28,6 +29,15 @@ from app.schemas.reports import (
 
 
 router = APIRouter(prefix="/reports", tags=["Reportes"])
+
+PAYMENT_METHOD_ORDER = (
+    PaymentMethod.CASH,
+    PaymentMethod.TRANSFER,
+    PaymentMethod.QR,
+    PaymentMethod.CARD,
+    PaymentMethod.MIXED,
+    PaymentMethod.CREDIT,
+)
 try:
     BOGOTA_TZ = ZoneInfo("America/Bogota")
 except ZoneInfoNotFoundError:  # Windows sin tzdata
@@ -45,7 +55,7 @@ def _range_bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
 @router.get("/inventory-value", response_model=InventoryValueOut)
 def inventory_value(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> InventoryValueOut:
     total = db.scalar(
         select(func.coalesce(func.sum(InventoryBalance.quantity * Product.cost_price), 0))
@@ -58,7 +68,7 @@ def inventory_value(
 @router.get("/low-stock", response_model=list[CurrentStockOut])
 def low_stock(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
     warehouse_id: int | None = Query(default=None),
 ) -> list[CurrentStockOut]:
     stock = func.coalesce(InventoryBalance.quantity, 0)
@@ -66,6 +76,7 @@ def low_stock(
         select(
             SaleItem.product_id.label("product_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+            func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.status == DocStatus.CONFIRMED)
@@ -90,6 +101,7 @@ def low_stock(
             Product.vat_rate,
             func.round(stock * Product.cost_price, 2).label("stock_value"),
             func.coalesce(sold.c.sold_quantity, 0).label("sold_quantity"),
+            func.coalesce(sold.c.sold_total, 0).label("sold_total"),
         )
         .select_from(Product)
         .join(Warehouse, true())
@@ -119,7 +131,7 @@ def low_stock(
 @router.get("/top-products", response_model=list[TopProductOut])
 def top_products(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     limit: int = Query(default=10, ge=1, le=100),
@@ -161,7 +173,7 @@ def sales_range(
     date_from: date,
     date_to: date,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> SalesRangeOut:
     start, end = _range_bounds(date_from, date_to)
     row = db.execute(
@@ -188,7 +200,7 @@ def daily_closing(
     date_from: date,
     date_to: date,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("reports.view")),
 ) -> DailyClosingOut:
     if date_from > date_to:
         raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor a la final")
@@ -202,6 +214,22 @@ def daily_closing(
             func.coalesce(func.sum(Sale.total), 0).label("total"),
         ).where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
     ).mappings().one()
+
+    payment_rows = db.execute(
+        select(
+            Sale.payment_method,
+            func.count(Sale.id).label("tickets"),
+            func.coalesce(func.sum(Sale.subtotal), 0).label("subtotal"),
+            func.coalesce(func.sum(Sale.tax_total), 0).label("tax_total"),
+            func.coalesce(func.sum(Sale.total), 0).label("total"),
+        )
+        .where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
+        .group_by(Sale.payment_method)
+    ).mappings().all()
+    payment_map = {
+        (row["payment_method"].value if isinstance(row["payment_method"], PaymentMethod) else str(row["payment_method"])): row
+        for row in payment_rows
+    }
 
     item_rows = db.execute(
         select(
@@ -229,6 +257,16 @@ def daily_closing(
         tax_total=totals["tax_total"],
         total=totals["total"],
         company_name=company.name if company else "FUNDACION NUESTRO FUTURO",
+        payment_methods=[
+            DailyClosingPaymentOut(
+                payment_method=method,
+                tickets=int(payment_map.get(method.value, {}).get("tickets", 0) or 0),
+                subtotal=payment_map.get(method.value, {}).get("subtotal", Decimal("0")) or Decimal("0"),
+                tax_total=payment_map.get(method.value, {}).get("tax_total", Decimal("0")) or Decimal("0"),
+                total=payment_map.get(method.value, {}).get("total", Decimal("0")) or Decimal("0"),
+            )
+            for method in PAYMENT_METHOD_ORDER
+        ],
         items=[
             DailyClosingItemOut(
                 product_name=row["product_name"],

@@ -16,7 +16,8 @@ import { Table } from '@/components/ui/Table'
 import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { ReceiptModal } from '@/components/ReceiptModal'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
-import type { Product } from '@/types/api'
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
+import type { PaymentMethod, Product } from '@/types/api'
 
 interface CartItem {
   product: Product
@@ -31,7 +32,7 @@ export const PosPage = () => {
   const [search, setSearch] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MIXED' | 'CREDIT'>('CASH')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
   const [note, setNote] = useState('')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [message, setMessage] = useState<string | null>(null)
@@ -277,17 +278,13 @@ export const PosPage = () => {
           <Select
             label="Método pago"
             value={paymentMethod}
-            onChange={(event): void =>
-              setPaymentMethod(
-                event.target.value as 'CASH' | 'CARD' | 'TRANSFER' | 'MIXED' | 'CREDIT',
-              )
-            }
+            onChange={(event): void => setPaymentMethod(event.target.value as PaymentMethod)}
           >
-            <option value="CASH">Efectivo</option>
-            <option value="CARD">Tarjeta</option>
-            <option value="TRANSFER">Transferencia</option>
-            <option value="MIXED">Mixto</option>
-            <option value="CREDIT">Crédito</option>
+            {PAYMENT_METHOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </Select>
           <Input label="Nota" value={note} onChange={(event): void => setNote(event.target.value)} />
         </div>

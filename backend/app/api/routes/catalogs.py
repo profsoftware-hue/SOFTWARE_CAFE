@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Customer, ProductCategory, Supplier, Warehouse
 from app.models.user import User
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/catalogs", tags=["Catálogos"])
 @router.get("/categories", response_model=list[CategoryOut])
 def list_categories(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
 ) -> list[ProductCategory]:
     return db.scalars(select(ProductCategory).order_by(ProductCategory.name.asc())).all()
 
@@ -36,7 +36,7 @@ def list_categories(
 def create_category(
     payload: CategoryCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.manage")),
 ) -> ProductCategory:
     obj = ProductCategory(name=payload.name.strip(), description=payload.description)
     db.add(obj)
@@ -52,7 +52,7 @@ def create_category(
 @router.get("/suppliers", response_model=list[SupplierOut])
 def list_suppliers(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
 ) -> list[Supplier]:
     return db.scalars(select(Supplier).order_by(Supplier.name.asc())).all()
 
@@ -61,7 +61,7 @@ def list_suppliers(
 def create_supplier(
     payload: SupplierCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.manage")),
 ) -> Supplier:
     obj = Supplier(
         name=payload.name.strip(),
@@ -84,7 +84,7 @@ def create_supplier(
 @router.get("/customers", response_model=list[CustomerOut])
 def list_customers(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[Customer]:
@@ -96,7 +96,7 @@ def list_customers(
 def create_customer(
     payload: CustomerCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER")),
+    _: User = Depends(require_permissions("sales.create")),
 ) -> Customer:
     obj = Customer(
         name=payload.name.strip(),
@@ -118,7 +118,7 @@ def create_customer(
 @router.get("/warehouses", response_model=list[WarehouseOut])
 def list_warehouses(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN", "SELLER", "WAREHOUSE")),
+    _: User = Depends(require_permissions("inventory.view")),
 ) -> list[Warehouse]:
     return db.scalars(select(Warehouse).order_by(Warehouse.id.asc())).all()
 
@@ -127,7 +127,7 @@ def list_warehouses(
 def create_warehouse(
     payload: WarehouseCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("ADMIN")),
+    _: User = Depends(require_permissions("settings.manage")),
 ) -> Warehouse:
     if payload.is_default:
         existing_defaults = db.scalars(select(Warehouse).where(Warehouse.is_default.is_(True))).all()
