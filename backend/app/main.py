@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.db.session import engine
 
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ccp.api")
 
 
