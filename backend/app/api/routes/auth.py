@@ -3,12 +3,13 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from time import monotonic
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models.user import Role, User
@@ -81,7 +82,12 @@ def bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(get_db
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     key = _login_key(request, payload.username)
     _check_login_rate_limit(key)
 
@@ -101,6 +107,16 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     role_codes = [role.code for role in user.roles]
     token, expires_in = create_access_token(subject=str(user.id), extra_claims={"roles": role_codes})
 
+    response.set_cookie(
+        key=settings.auth_cookie_name,
+        value=token,
+        max_age=expires_in,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        path="/",
+    )
+
     return TokenResponse(
         access_token=token,
         token_type="bearer",
@@ -109,6 +125,12 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         username=user.username,
         roles=role_codes,
     )
+
+
+@router.post("/logout")
+def logout(response: Response) -> dict[str, str]:
+    response.delete_cookie(settings.auth_cookie_name, path="/")
+    return {"message": "Sesión cerrada"}
 
 
 @router.get("/me", response_model=UserOut)

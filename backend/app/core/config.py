@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     db_dialect: str = "postgresql"
 
     upload_dir: Path = BACKEND_DIR / "uploads"
+    auth_cookie_name: str = "ccp_access_token"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @field_validator("secret_key", mode="before")
