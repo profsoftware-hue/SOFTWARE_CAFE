@@ -16,13 +16,10 @@ export const AuthenticatedImage = ({
   className,
   fallbackClassName,
 }: AuthenticatedImageProps) => {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null)
+  const [image, setImage] = useState<{ path: string; url: string } | null>(null)
 
   useEffect(() => {
-    if (!path) {
-      setObjectUrl(null)
-      return
-    }
+    if (!path) return
 
     let objectUrlCreated: string | null = null
     const controller = new AbortController()
@@ -34,15 +31,19 @@ export const AuthenticatedImage = ({
       .get(relativePath, { responseType: 'blob', signal: controller.signal })
       .then((response) => {
         objectUrlCreated = URL.createObjectURL(response.data)
-        setObjectUrl(objectUrlCreated)
+        setImage({ path, url: objectUrlCreated })
       })
-      .catch(() => setObjectUrl(null))
+      .catch(() => {
+        setImage((previous) => (previous?.path === path ? null : previous))
+      })
 
     return () => {
       controller.abort()
       if (objectUrlCreated) URL.revokeObjectURL(objectUrlCreated)
     }
   }, [path])
+
+  const objectUrl = path && image?.path === path ? image.url : null
 
   if (!objectUrl) {
     return (

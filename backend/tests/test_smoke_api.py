@@ -57,6 +57,27 @@ def test_health_database() -> None:
     assert response.json()["status"] == "ok"
 
 
+def test_cookie_session_flow() -> None:
+    _ensure_admin()
+    cookie_client = TestClient(app)
+
+    login = cookie_client.post(
+        "/api/v1/auth/login",
+        json={"username": "smokeadmin", "password": "Smoke12345*"},
+    )
+    assert login.status_code == 200, login.text
+    assert "ccp_access_token" in cookie_client.cookies
+
+    me = cookie_client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "smokeadmin"
+
+    logout = cookie_client.post("/api/v1/auth/logout")
+    assert logout.status_code == 200
+    after_logout = cookie_client.get("/api/v1/auth/me")
+    assert after_logout.status_code == 401
+
+
 def test_product_sale_and_closing() -> None:
     _ensure_admin()
     headers = _login_headers()
@@ -176,6 +197,9 @@ def test_roles_and_permissions_are_enforced() -> None:
             headers=admin_headers,
         )
         assert created.status_code == 201, created.text
+        role_id = created.json()["id"]
+    else:
+        role_id = role["id"]
 
     user = client.post(
         "/api/v1/users",
@@ -209,6 +233,22 @@ def test_roles_and_permissions_are_enforced() -> None:
         headers=user_headers,
     )
     assert denied_product.status_code == 403
+
+    granted = client.put(
+        f"/api/v1/roles/{role_id}",
+        json={"permission_codes": ["reports.view", "inventory.view"]},
+        headers=admin_headers,
+    )
+    assert granted.status_code == 200, granted.text
+    now_allowed = client.get("/api/v1/products?limit=1", headers=user_headers)
+    assert now_allowed.status_code == 200
+
+    restored = client.put(
+        f"/api/v1/roles/{role_id}",
+        json={"permission_codes": ["reports.view"]},
+        headers=admin_headers,
+    )
+    assert restored.status_code == 200, restored.text
 
 
 def test_admin_guard_and_permission_hierarchy() -> None:

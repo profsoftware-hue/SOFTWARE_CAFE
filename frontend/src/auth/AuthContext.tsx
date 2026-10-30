@@ -96,7 +96,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (restoredSession.current) return
     restoredSession.current = true
     if (session) {
-      void refreshProfile()
+      queueMicrotask(() => {
+        void refreshProfile()
+      })
     }
   }, [refreshProfile, session])
 
