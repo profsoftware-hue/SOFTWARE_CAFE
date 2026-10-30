@@ -1,0 +1,15 @@
+.env
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/uploads/
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+.playwright-mcp/
+*.log
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
