@@ -1,5 +1,13 @@
 import { apiClient } from '@/api/client'
-import type { CurrentStockRow, DailyClosing, InventoryValue, SalesRange, TopProduct } from '@/types/api'
+import type {
+  CurrentStockRow,
+  DailyClosing,
+  InventoryValue,
+  InvoiceRequest,
+  SalesRange,
+  ThirdPartyReport,
+  TopProduct,
+} from '@/types/api'
 
 export const getInventoryValue = async (): Promise<InventoryValue> => {
   const { data } = await apiClient.get<InventoryValue>('/reports/inventory-value')
@@ -37,6 +45,26 @@ export const getSalesRange = async (date_from: string, date_to: string): Promise
 
 export const getDailyClosing = async (dateFrom: string, dateTo: string): Promise<DailyClosing> => {
   const { data } = await apiClient.get<DailyClosing>('/reports/daily-closing', {
+    params: { date_from: dateFrom, date_to: dateTo },
+  })
+  return data
+}
+
+export const getThirdPartyReport = async (
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<ThirdPartyReport[]> => {
+  const { data } = await apiClient.get<ThirdPartyReport[]>('/reports/third-parties', {
+    params: { date_from: dateFrom, date_to: dateTo },
+  })
+  return data
+}
+
+export const getInvoiceRequests = async (
+  dateFrom?: string,
+  dateTo?: string,
+): Promise<InvoiceRequest[]> => {
+  const { data } = await apiClient.get<InvoiceRequest[]>('/reports/invoice-requests', {
     params: { date_from: dateFrom, date_to: dateTo },
   })
   return data

@@ -177,6 +177,110 @@ def test_product_sale_and_closing() -> None:
     assert qr_methods["QR"]["tickets"] >= 1
     assert float(qr_methods["QR"]["total"]) >= 1190.0
 
+    customers = client.get("/api/v1/catalogs/customers", headers=headers).json()
+    customer = next((item for item in customers if item["document_number"] == "TEST-INV-001"), None)
+    if customer is None:
+        created_customer = client.post(
+            "/api/v1/catalogs/customers",
+            json={
+                "customer_type": "NATURAL",
+                "first_name": "Ana",
+                "last_name": "Pérez",
+                "document_type": "CC",
+                "document_number": "TEST-INV-001",
+                "email": "ana.factura@example.com",
+                "phone": "3001234567",
+            },
+            headers=headers,
+        )
+        assert created_customer.status_code == 201, created_customer.text
+        customer = created_customer.json()
+    assert customer["name"] == "Ana Pérez"
+
+    lookup = client.get(
+        "/api/v1/catalogs/customers/lookup",
+        params={"document_type": "CC", "document_number": "TEST-INV-001"},
+        headers=headers,
+    )
+    assert lookup.status_code == 200, lookup.text
+    assert lookup.json()["id"] == customer["id"]
+
+    lookup_missing = client.get(
+        "/api/v1/catalogs/customers/lookup",
+        params={"document_type": "CC", "document_number": "NO-EXISTE-E2E"},
+        headers=headers,
+    )
+    assert lookup_missing.status_code == 404
+
+    duplicate = client.post(
+        "/api/v1/catalogs/customers",
+        json={
+            "customer_type": "NATURAL",
+            "first_name": "Otra",
+            "last_name": "Persona",
+            "document_type": "CC",
+            "document_number": "TEST-INV-001",
+            "email": "otra@example.com",
+            "phone": "3000000000",
+        },
+        headers=headers,
+    )
+    assert duplicate.status_code == 409
+
+    missing_customer = client.post(
+        "/api/v1/inventory/sales",
+        json={
+            "warehouse_id": 1,
+            "payment_method": "CASH",
+            "invoice_requested": True,
+            "items": [{"product_id": product_id, "quantity": 1}],
+            "confirm": True,
+        },
+        headers=headers,
+    )
+    assert missing_customer.status_code == 400
+
+    invoice_sale = client.post(
+        "/api/v1/inventory/sales",
+        json={
+            "warehouse_id": 1,
+            "customer_id": customer["id"],
+            "payment_method": "TRANSFER",
+            "invoice_requested": True,
+            "items": [{"product_id": product_id, "quantity": 1}],
+            "confirm": True,
+        },
+        headers=headers,
+    )
+    assert invoice_sale.status_code == 201, invoice_sale.text
+    invoice_sale_id = invoice_sale.json()["id"]
+
+    invoice_receipt = client.get(
+        f"/api/v1/inventory/sales/{invoice_sale_id}/receipt",
+        headers=headers,
+    )
+    assert invoice_receipt.status_code == 200
+    receipt_data = invoice_receipt.json()
+    assert receipt_data["invoice_requested"] is True
+    assert receipt_data["invoice_customer_document_number"] == "TEST-INV-001"
+    assert receipt_data["invoice_customer_email"] == "ana.factura@example.com"
+
+    third_parties = client.get(
+        f"/api/v1/reports/third-parties?date_from={today}&date_to={today}",
+        headers=headers,
+    )
+    assert third_parties.status_code == 200, third_parties.text
+    third_party = next(item for item in third_parties.json() if item["customer_id"] == customer["id"])
+    assert third_party["invoice_count"] >= 1
+    assert float(third_party["total_invoiced"]) >= 1190.0
+
+    invoice_requests = client.get(
+        f"/api/v1/reports/invoice-requests?date_from={today}&date_to={today}",
+        headers=headers,
+    )
+    assert invoice_requests.status_code == 200, invoice_requests.text
+    assert any(item["sale_id"] == invoice_sale_id for item in invoice_requests.json())
+
 
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()

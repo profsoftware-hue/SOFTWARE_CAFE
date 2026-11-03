@@ -58,6 +58,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - Auth JWT en cookie HttpOnly
 - Usuarios, roles y permisos (RBAC)
 - Catálogos (categorías, proveedores, clientes, bodegas)
+- Terceros para facturación electrónica (CC, CE, NIT, TI, PPT) y reportes de facturas solicitadas
 - Productos con carga/reemplazo de imagen y alta rápida (nombre + cantidad, SKU automático)
 - Compras, ventas POS, ajustes, kardex y stock actual
 - Reportes base (valor inventario, stock bajo, top productos, ventas por rango)

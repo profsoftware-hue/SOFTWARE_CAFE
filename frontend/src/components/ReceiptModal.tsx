@@ -1,6 +1,7 @@
 import { Printer, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
+import { DOCUMENT_TYPE_LABELS } from '@/lib/customers'
 import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments'
 import type { SaleReceipt } from '@/types/api'
@@ -95,6 +96,15 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
     <div><span>Fecha</span><span>${formatDateTime(receipt.sold_at)}</span></div>
     <div><span>Cliente</span><span>${escapeHtml(receipt.customer_name ?? 'Consumidor final')}</span></div>
     <div><span>Pago</span><span>${escapeHtml(PAYMENT_METHOD_LABELS[receipt.payment_method] ?? receipt.payment_method)}</span></div>
+    ${
+      receipt.invoice_requested
+        ? `<div><span>Factura electrónica</span><span>Sí</span></div>
+           <div><span>Documento</span><span>${escapeHtml(
+             `${receipt.invoice_customer_document_type ? DOCUMENT_TYPE_LABELS[receipt.invoice_customer_document_type] : ''} ${receipt.invoice_customer_document_number ?? ''}`.trim(),
+           )}</span></div>
+           <div><span>Correo</span><span>${escapeHtml(receipt.invoice_customer_email ?? '-')}</span></div>`
+        : ''
+    }
     <div><span>Vendedor</span><span>${escapeHtml(receipt.seller_name ?? '-')}</span></div>
   </div>
 
@@ -189,6 +199,27 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
                 <span>Pago</span>
                 <span>{PAYMENT_METHOD_LABELS[receipt.payment_method] ?? receipt.payment_method}</span>
               </div>
+              {receipt.invoice_requested ? (
+                <>
+                  <div className="flex justify-between gap-2">
+                    <span>Factura electrónica</span>
+                    <span>Sí</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>Documento</span>
+                    <span>
+                      {receipt.invoice_customer_document_type
+                        ? DOCUMENT_TYPE_LABELS[receipt.invoice_customer_document_type]
+                        : ''}{' '}
+                      {receipt.invoice_customer_document_number ?? '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>Correo</span>
+                    <span>{receipt.invoice_customer_email ?? '-'}</span>
+                  </div>
+                </>
+              ) : null}
             </div>
 
             <table className="mt-2 w-full border-collapse text-[10px]">

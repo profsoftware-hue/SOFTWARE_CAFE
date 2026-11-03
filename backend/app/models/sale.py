@@ -3,11 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Computed, DateTime, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import Boolean, Computed, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import DOC_STATUS_ENUM, PAYMENT_METHOD_ENUM, DocStatus, PaymentMethod
+from app.models.enums import (
+    DOC_STATUS_ENUM,
+    DOCUMENT_TYPE_ENUM,
+    PAYMENT_METHOD_ENUM,
+    DocStatus,
+    DocumentType,
+    PaymentMethod,
+)
 
 
 class Sale(Base):
@@ -21,6 +28,13 @@ class Sale(Base):
     sold_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     status: Mapped[DocStatus] = mapped_column(DOC_STATUS_ENUM, nullable=False, default=DocStatus.DRAFT)
     payment_method: Mapped[PaymentMethod] = mapped_column(PAYMENT_METHOD_ENUM, nullable=False, default=PaymentMethod.CASH)
+
+    invoice_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    invoice_customer_name: Mapped[str | None] = mapped_column(String(180))
+    invoice_customer_document_type: Mapped[DocumentType | None] = mapped_column(DOCUMENT_TYPE_ENUM)
+    invoice_customer_document_number: Mapped[str | None] = mapped_column(String(40))
+    invoice_customer_email: Mapped[str | None] = mapped_column(String(120))
+    invoice_customer_phone: Mapped[str | None] = mapped_column(String(40))
 
     subtotal: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     tax_total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")

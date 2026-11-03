@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_permissions
 from app.db.session import get_db
 from app.models.catalogs import Customer, ProductCategory, Supplier, Warehouse
+from app.models.enums import DocumentType
 from app.models.user import User
 from app.schemas.catalogs import (
     CategoryCreate,
@@ -81,6 +82,28 @@ def create_supplier(
     return obj
 
 
+@router.get("/customers/lookup", response_model=CustomerOut)
+def lookup_customer(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permissions("inventory.view")),
+    document_type: DocumentType = Query(...),
+    document_number: str = Query(..., min_length=1, max_length=30),
+) -> Customer:
+    document = document_number.strip()
+    customer = db.scalar(
+        select(Customer).where(
+            Customer.document_type == document_type,
+            Customer.document_number == document,
+        )
+    )
+    if not customer:
+        raise HTTPException(
+            status_code=404,
+            detail="No existe un cliente con ese tipo y número de documento",
+        )
+    return customer
+
+
 @router.get("/customers", response_model=list[CustomerOut])
 def list_customers(
     db: Session = Depends(get_db),
@@ -98,10 +121,24 @@ def create_customer(
     db: Session = Depends(get_db),
     _: User = Depends(require_permissions("sales.create")),
 ) -> Customer:
+    document_number = (payload.document_number or "").strip() or None
+    if document_number is not None:
+        existing = db.scalar(select(Customer.id).where(Customer.document_number == document_number))
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe un cliente con ese número de documento",
+            )
+
     obj = Customer(
-        name=payload.name.strip(),
-        document_number=payload.document_number,
-        phone=payload.phone,
+        name=payload.resolved_name(),
+        customer_type=payload.customer_type,
+        first_name=(payload.first_name or "").strip() or None,
+        last_name=(payload.last_name or "").strip() or None,
+        business_name=(payload.business_name or "").strip() or None,
+        document_type=payload.document_type,
+        document_number=document_number,
+        phone=(payload.phone or "").strip() or None,
         email=str(payload.email) if payload.email else None,
         address=payload.address,
     )
