@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Minus, Plus, ShoppingCart, Trash2, UserPlus } from 'lucide-react'
+import { History, Minus, Plus, ShoppingCart, Trash2, UserPlus } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 
 import { getApiErrorMessage } from '@/api/client'
@@ -10,7 +10,7 @@ import {
   lookupCustomer,
   type CustomerCreatePayload,
 } from '@/api/catalogs'
-import { createSale, getPosQuote, getSaleReceipt } from '@/api/inventory'
+import { createSale, getPosQuote, getSaleReceipt, listRecentSales } from '@/api/inventory'
 import { listProducts } from '@/api/products'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -23,8 +23,8 @@ import { Table } from '@/components/ui/Table'
 import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { ReceiptModal } from '@/components/ReceiptModal'
 import { CUSTOMER_TYPE_OPTIONS, DOCUMENT_TYPE_OPTIONS, formatDocument } from '@/lib/customers'
-import { formatCurrencyCOP, formatNumber } from '@/lib/format'
-import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
+import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
 import type { Customer, CustomerType, DocumentType, PaymentMethod, Product } from '@/types/api'
 
 interface CartItem {
@@ -82,6 +82,7 @@ export const PosPage = () => {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [receiptSaleId, setReceiptSaleId] = useState<number | null>(null)
+  const [recentOpen, setRecentOpen] = useState(false)
 
   const productsQuery = useQuery({
     queryKey: ['products', 'pos'],
@@ -182,6 +183,7 @@ export const PosPage = () => {
       void queryClient.invalidateQueries({ queryKey: ['kardex'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       void queryClient.invalidateQueries({ queryKey: ['report'] })
+      void queryClient.invalidateQueries({ queryKey: ['recent-sales'] })
     },
     onError: (unknownError) => {
       setMessage(null)
@@ -193,6 +195,12 @@ export const PosPage = () => {
     queryKey: ['sale-receipt', receiptSaleId],
     queryFn: () => getSaleReceipt(receiptSaleId as number),
     enabled: receiptSaleId !== null,
+  })
+
+  const recentSalesQuery = useQuery({
+    queryKey: ['recent-sales'],
+    queryFn: () => listRecentSales(30),
+    enabled: recentOpen,
   })
 
   const addToCart = (product: Product) => {
@@ -438,10 +446,16 @@ export const PosPage = () => {
         title="Carrito"
         subtitle="Calcula subtotal, IVA y total"
         actions={
-          <Badge variant="default">
-            <ShoppingCart size={14} className="mr-1" />
-            <span className="whitespace-nowrap">{cartItems.length} ítems</span>
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" onClick={(): void => setRecentOpen(true)}>
+              <History size={16} className="mr-1" />
+              Últimas facturas
+            </Button>
+            <Badge variant="default">
+              <ShoppingCart size={14} className="mr-1" />
+              <span className="whitespace-nowrap">{cartItems.length} ítems</span>
+            </Badge>
+          </div>
         }
       >
         <div className="grid gap-3 md:grid-cols-2">
@@ -761,6 +775,52 @@ export const PosPage = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={recentOpen}
+        onClose={(): void => setRecentOpen(false)}
+        title="Últimas facturas"
+        description="Abre el recibo de una venta reciente para imprimirlo nuevamente."
+        className="max-w-4xl"
+      >
+        {recentSalesQuery.isLoading ? (
+          <p className="text-sm text-slate-500">Cargando facturas recientes...</p>
+        ) : null}
+        {!recentSalesQuery.isLoading &&
+        (!recentSalesQuery.data || recentSalesQuery.data.length === 0) ? (
+          <EmptyState title="Sin facturas" description="Aún no hay ventas confirmadas." />
+        ) : null}
+        {recentSalesQuery.data && recentSalesQuery.data.length > 0 ? (
+          <Table columns={['Fecha', 'Factura', 'Cliente', 'Pago', 'Total', 'Factura electrónica', 'Acción']}>
+            {recentSalesQuery.data.map((sale) => (
+              <tr key={sale.id}>
+                <td className="px-3 py-2.5 text-xs text-slate-500">{formatDateTime(sale.sold_at)}</td>
+                <td className="px-3 py-2.5 font-medium text-slate-800">{sale.sale_number}</td>
+                <td className="px-3 py-2.5">{sale.customer_name ?? 'Consumidor final'}</td>
+                <td className="px-3 py-2.5">{PAYMENT_METHOD_LABELS[sale.payment_method] ?? sale.payment_method}</td>
+                <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(sale.total)}</td>
+                <td className="px-3 py-2.5">
+                  <Badge variant={sale.invoice_requested ? 'success' : 'default'}>
+                    {sale.invoice_requested ? 'Sí' : 'No'}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2.5">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={(): void => {
+                      setReceiptSaleId(sale.id)
+                      setRecentOpen(false)
+                    }}
+                  >
+                    Ver recibo
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        ) : null}
       </Modal>
 
       <ReceiptModal

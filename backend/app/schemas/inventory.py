@@ -149,6 +149,17 @@ class SalesByDateOut(BaseModel):
     total: Decimal
 
 
+class RecentSaleOut(BaseModel):
+    id: int
+    sale_number: str
+    sold_at: datetime
+    payment_method: PaymentMethod
+    customer_name: str | None
+    invoice_requested: bool
+    total: Decimal
+    status: DocStatus
+
+
 class SaleReceiptItemOut(BaseModel):
     product_name: str
     barcode: str | None

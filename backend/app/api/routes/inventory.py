@@ -29,6 +29,7 @@ from app.schemas.inventory import (
     PosQuoteRequest,
     PosQuoteResponse,
     PurchaseCreate,
+    RecentSaleOut,
     SaleCreate,
     SaleReceiptItemOut,
     SaleReceiptOut,
@@ -329,6 +330,32 @@ def create_sale(
 
     db.refresh(sale)
     return _build_document_out(sale, "sale_number")
+
+
+@router.get("/sales/recent", response_model=list[RecentSaleOut])
+def recent_sales(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permissions("sales.create")),
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list[RecentSaleOut]:
+    stmt = (
+        select(
+            Sale.id,
+            Sale.sale_number,
+            Sale.sold_at,
+            Sale.payment_method,
+            Customer.name.label("customer_name"),
+            Sale.invoice_requested,
+            Sale.total,
+            Sale.status,
+        )
+        .outerjoin(Customer, Customer.id == Sale.customer_id)
+        .where(Sale.status == DocStatus.CONFIRMED)
+        .order_by(desc(Sale.sold_at), desc(Sale.id))
+        .limit(limit)
+    )
+    rows = db.execute(stmt).mappings().all()
+    return [RecentSaleOut(**row) for row in rows]
 
 
 @router.get("/sales/{sale_id}/receipt", response_model=SaleReceiptOut)

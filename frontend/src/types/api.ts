@@ -253,6 +253,17 @@ export interface SalesRange {
   total: string
 }
 
+export interface RecentSale {
+  id: number
+  sale_number: string
+  sold_at: string
+  payment_method: PaymentMethod
+  customer_name: string | null
+  invoice_requested: boolean
+  total: string
+  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+}
+
 export interface SaleReceiptItem {
   product_name: string
   barcode: string | null

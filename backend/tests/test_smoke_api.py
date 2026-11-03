@@ -281,6 +281,13 @@ def test_product_sale_and_closing() -> None:
     assert invoice_requests.status_code == 200, invoice_requests.text
     assert any(item["sale_id"] == invoice_sale_id for item in invoice_requests.json())
 
+    recent = client.get("/api/v1/inventory/sales/recent?limit=10", headers=headers)
+    assert recent.status_code == 200, recent.text
+    recent_sale = next(item for item in recent.json() if item["id"] == invoice_sale_id)
+    assert recent_sale["customer_name"] == "Ana Pérez"
+    assert recent_sale["invoice_requested"] is True
+    assert recent_sale["sale_number"] == invoice_sale.json()["number"]
+
 
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()
