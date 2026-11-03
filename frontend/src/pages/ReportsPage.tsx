@@ -18,7 +18,7 @@ import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { DailyClosingModal } from '@/components/DailyClosingModal'
 import { downloadCsv } from '@/lib/csv'
-import { CUSTOMER_TYPE_LABELS, DOCUMENT_TYPE_LABELS } from '@/lib/customers'
+import { CUSTOMER_TYPE_LABELS, formatDocument } from '@/lib/customers'
 import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
 
 const today = new Date()
@@ -92,7 +92,7 @@ export const ReportsPage = () => {
       thirdPartiesQuery.data.map((row) => [
         row.name,
         CUSTOMER_TYPE_LABELS[row.customer_type] ?? row.customer_type,
-        `${DOCUMENT_TYPE_LABELS[row.document_type] ?? row.document_type} ${row.document_number ?? ''}`.trim(),
+        formatDocument(row.document_type, row.document_number),
         row.email ?? '',
         row.phone ?? '',
         row.total_sales,
@@ -111,7 +111,7 @@ export const ReportsPage = () => {
         row.sold_at,
         row.sale_number,
         row.customer_name ?? '',
-        `${row.document_type ? DOCUMENT_TYPE_LABELS[row.document_type] : ''} ${row.document_number ?? ''}`.trim(),
+        formatDocument(row.document_type, row.document_number),
         row.email ?? '',
         row.phone ?? '',
         row.total,
@@ -285,7 +285,7 @@ export const ReportsPage = () => {
                   </td>
                   <td className="px-3 py-2.5">
                     <p className="text-xs text-slate-700">
-                      {DOCUMENT_TYPE_LABELS[row.document_type]} {row.document_number ?? '-'}
+                      {formatDocument(row.document_type, row.document_number) || '-'}
                     </p>
                   </td>
                   <td className="px-3 py-2.5">
@@ -322,8 +322,7 @@ export const ReportsPage = () => {
                     <p className="text-xs text-slate-500">{row.email ?? '-'}</p>
                   </td>
                   <td className="px-3 py-2.5 text-xs">
-                    {row.document_type ? DOCUMENT_TYPE_LABELS[row.document_type] : ''}{' '}
-                    {row.document_number ?? '-'}
+                    {formatDocument(row.document_type, row.document_number) || '-'}
                   </td>
                   <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
                 </tr>

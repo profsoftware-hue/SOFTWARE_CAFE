@@ -21,3 +21,12 @@ export const CUSTOMER_TYPE_OPTIONS = (Object.keys(CUSTOMER_TYPE_LABELS) as Custo
 export const DOCUMENT_TYPE_OPTIONS = (Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[]).map(
   (value) => ({ value, label: DOCUMENT_TYPE_LABELS[value] }),
 )
+
+export const formatDocument = (
+  documentType: DocumentType | null | undefined,
+  documentNumber: string | null | undefined,
+): string => {
+  const number = (documentNumber ?? '').trim()
+  if (!documentType || !number) return number
+  return `${documentType}.${number}`
+}

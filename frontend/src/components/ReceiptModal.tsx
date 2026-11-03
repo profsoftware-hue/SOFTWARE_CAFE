@@ -1,7 +1,7 @@
 import { Printer, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
-import { DOCUMENT_TYPE_LABELS } from '@/lib/customers'
+import { formatDocument } from '@/lib/customers'
 import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments'
 import type { SaleReceipt } from '@/types/api'
@@ -100,7 +100,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
       receipt.invoice_requested
         ? `<div><span>Factura electrónica</span><span>Sí</span></div>
            <div><span>Documento</span><span>${escapeHtml(
-             `${receipt.invoice_customer_document_type ? DOCUMENT_TYPE_LABELS[receipt.invoice_customer_document_type] : ''} ${receipt.invoice_customer_document_number ?? ''}`.trim(),
+             formatDocument(receipt.invoice_customer_document_type, receipt.invoice_customer_document_number),
            )}</span></div>
            <div><span>Correo</span><span>${escapeHtml(receipt.invoice_customer_email ?? '-')}</span></div>`
         : ''
@@ -208,10 +208,10 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
                   <div className="flex justify-between gap-2">
                     <span>Documento</span>
                     <span>
-                      {receipt.invoice_customer_document_type
-                        ? DOCUMENT_TYPE_LABELS[receipt.invoice_customer_document_type]
-                        : ''}{' '}
-                      {receipt.invoice_customer_document_number ?? '-'}
+                      {formatDocument(
+                        receipt.invoice_customer_document_type,
+                        receipt.invoice_customer_document_number,
+                      ) || '-'}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2">

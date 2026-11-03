@@ -23,7 +23,7 @@ import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
 import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { ReceiptModal } from '@/components/ReceiptModal'
-import { CUSTOMER_TYPE_OPTIONS, DOCUMENT_TYPE_OPTIONS } from '@/lib/customers'
+import { CUSTOMER_TYPE_OPTIONS, DOCUMENT_TYPE_OPTIONS, formatDocument } from '@/lib/customers'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
 import type { CustomerType, DocumentType, PaymentMethod, Product } from '@/types/api'
@@ -121,7 +121,7 @@ export const PosPage = () => {
       setCustomerId(String(customer.id))
       setInvoiceRequested(true)
       setLookupMessage(
-        `Cliente encontrado: ${customer.name} · ${customer.document_type} ${customer.document_number ?? ''}`,
+        `Cliente encontrado: ${customer.name} · ${formatDocument(customer.document_type, customer.document_number)}`,
       )
       setLookupError(null)
       setLookupNotFound(false)
@@ -151,7 +151,7 @@ export const PosPage = () => {
       setCustomerFormError(null)
       setLookupDocType(customer.document_type)
       setLookupDocNumber(customer.document_number ?? '')
-      setLookupMessage(`Cliente creado: ${customer.name} · ${customer.document_type} ${customer.document_number ?? ''}`)
+      setLookupMessage(`Cliente creado: ${customer.name} · ${formatDocument(customer.document_type, customer.document_number)}`)
       setLookupError(null)
       setLookupNotFound(false)
       setMessage(`Cliente "${customer.name}" creado para facturación electrónica.`)
@@ -533,7 +533,7 @@ export const PosPage = () => {
                 </Button>
                 {selectedCustomer ? (
                   <span className="text-xs text-slate-600">
-                    {selectedCustomer.document_type} {selectedCustomer.document_number ?? '-'} ·{' '}
+                    {formatDocument(selectedCustomer.document_type, selectedCustomer.document_number) || '-'} ·{' '}
                     {selectedCustomer.email ?? 'sin correo'} · {selectedCustomer.phone ?? 'sin teléfono'}
                   </span>
                 ) : (
