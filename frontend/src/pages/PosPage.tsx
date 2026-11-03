@@ -6,7 +6,6 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { getApiErrorMessage } from '@/api/client'
 import {
   createCustomer,
-  listCustomers,
   listWarehouses,
   lookupCustomer,
   type CustomerCreatePayload,
@@ -26,13 +25,15 @@ import { ReceiptModal } from '@/components/ReceiptModal'
 import { CUSTOMER_TYPE_OPTIONS, DOCUMENT_TYPE_OPTIONS, formatDocument } from '@/lib/customers'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
-import type { CustomerType, DocumentType, PaymentMethod, Product } from '@/types/api'
+import type { Customer, CustomerType, DocumentType, PaymentMethod, Product } from '@/types/api'
 
 interface CartItem {
   product: Product
   quantity: number
   unitPriceExclTax: number
 }
+
+type CustomerMode = 'FINAL' | 'CUSTOMER'
 
 interface CustomerFormState {
   customer_type: CustomerType
@@ -64,7 +65,8 @@ export const PosPage = () => {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
-  const [customerId, setCustomerId] = useState('')
+  const [customerMode, setCustomerMode] = useState<CustomerMode>('FINAL')
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [lookupDocType, setLookupDocType] = useState<DocumentType>('CC')
   const [lookupDocNumber, setLookupDocNumber] = useState('')
   const [lookupMessage, setLookupMessage] = useState<string | null>(null)
@@ -86,11 +88,9 @@ export const PosPage = () => {
     queryFn: () => listProducts({ is_active: true, limit: 500 }),
   })
   const warehousesQuery = useQuery({ queryKey: ['warehouses'], queryFn: listWarehouses })
-  const customersQuery = useQuery({ queryKey: ['customers'], queryFn: listCustomers })
 
   const defaultWarehouse = warehousesQuery.data?.find((warehouse) => warehouse.is_default) ?? warehousesQuery.data?.[0]
   const selectedWarehouseId = warehouseId || (defaultWarehouse ? String(defaultWarehouse.id) : '')
-  const selectedCustomer = customersQuery.data?.find((customer) => String(customer.id) === customerId)
 
   const cartItems = useMemo(() => Object.values(cart), [cart])
 
@@ -118,7 +118,8 @@ export const PosPage = () => {
       documentNumber: string
     }) => lookupCustomer(documentType, documentNumber),
     onSuccess: (customer) => {
-      setCustomerId(String(customer.id))
+      setCustomerMode('CUSTOMER')
+      setSelectedCustomer(customer)
       setInvoiceRequested(true)
       setLookupMessage(
         `Cliente encontrado: ${customer.name} · ${formatDocument(customer.document_type, customer.document_number)}`,
@@ -128,7 +129,7 @@ export const PosPage = () => {
       setError(null)
     },
     onError: (unknownError) => {
-      setCustomerId('')
+      setSelectedCustomer(null)
       setLookupMessage(null)
       if (isAxiosError(unknownError) && unknownError.response?.status === 404) {
         setLookupNotFound(true)
@@ -143,8 +144,9 @@ export const PosPage = () => {
   const customerMutation = useMutation({
     mutationFn: createCustomer,
     onSuccess: (customer) => {
-      void queryClient.invalidateQueries({ queryKey: ['customers'] })
-      setCustomerId(String(customer.id))
+      void queryClient.invalidateQueries({ queryKey: ['report'] })
+      setCustomerMode('CUSTOMER')
+      setSelectedCustomer(customer)
       setInvoiceRequested(true)
       setCustomerModalOpen(false)
       setCustomerForm(emptyCustomerForm())
@@ -168,6 +170,12 @@ export const PosPage = () => {
       setError(null)
       setCart({})
       setNote('')
+      setCustomerMode('FINAL')
+      setSelectedCustomer(null)
+      setLookupDocNumber('')
+      setLookupMessage(null)
+      setLookupError(null)
+      setLookupNotFound(false)
       setInvoiceRequested(false)
       quoteMutation.reset()
       void queryClient.invalidateQueries({ queryKey: ['stock'] })
@@ -242,6 +250,18 @@ export const PosPage = () => {
       const { [key]: _, ...rest } = prev
       return rest
     })
+  }
+
+  const changeCustomerMode = (mode: CustomerMode) => {
+    setCustomerMode(mode)
+    setLookupMessage(null)
+    setLookupError(null)
+    setLookupNotFound(false)
+    if (mode === 'FINAL') {
+      setSelectedCustomer(null)
+      setInvoiceRequested(false)
+      setLookupDocNumber('')
+    }
   }
 
   const searchCustomer = () => {
@@ -343,14 +363,18 @@ export const PosPage = () => {
       setError('El carrito está vacío.')
       return
     }
-    if (invoiceRequested && !customerId) {
-      setError('Selecciona un cliente o créalo para la factura electrónica.')
+    if (customerMode === 'CUSTOMER' && !selectedCustomer) {
+      setError('Digita la cédula o NIT y busca el cliente antes de confirmar.')
+      return
+    }
+    if (invoiceRequested && !selectedCustomer) {
+      setError('Selecciona un cliente identificado para la factura electrónica.')
       return
     }
 
     saleMutation.mutate({
       warehouse_id: Number(selectedWarehouseId),
-      customer_id: customerId ? Number(customerId) : null,
+      customer_id: selectedCustomer?.id ?? null,
       payment_method: paymentMethod,
       invoice_requested: invoiceRequested,
       note: note.trim() || null,
@@ -436,16 +460,12 @@ export const PosPage = () => {
           </Select>
 
           <Select
-            label="Cliente (opcional)"
-            value={customerId}
-            onChange={(event): void => setCustomerId(event.target.value)}
+            label="Cliente"
+            value={customerMode}
+            onChange={(event): void => changeCustomerMode(event.target.value as CustomerMode)}
           >
-            <option value="">Consumidor final</option>
-            {customersQuery.data?.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
+            <option value="FINAL">Consumidor final</option>
+            <option value="CUSTOMER">Cliente con cédula o NIT</option>
           </Select>
           <Select
             label="Método pago"
@@ -460,7 +480,8 @@ export const PosPage = () => {
           </Select>
           <Input label="Nota" value={note} onChange={(event): void => setNote(event.target.value)} />
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+          {customerMode === 'CUSTOMER' ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
             <p className="text-sm font-semibold text-slate-800">Buscar tercero existente</p>
             <p className="text-xs text-slate-500">Consulta por cédula, NIT, CE, TI o PPT.</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_auto] sm:items-end">
@@ -507,9 +528,11 @@ export const PosPage = () => {
             {lookupError ? (
               <p className="mt-2 text-xs text-rose-600">{lookupError}</p>
             ) : null}
-          </div>
+            </div>
+          ) : null}
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+          {customerMode === 'CUSTOMER' ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
@@ -543,7 +566,8 @@ export const PosPage = () => {
                 )}
               </div>
             ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
 
         {cartItems.length === 0 ? (
