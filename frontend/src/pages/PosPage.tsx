@@ -10,7 +10,7 @@ import {
   lookupCustomer,
   type CustomerCreatePayload,
 } from '@/api/catalogs'
-import { createSale, getPosQuote, getSaleReceipt, listRecentSales } from '@/api/inventory'
+import { createSale, getSaleReceipt, listRecentSales } from '@/api/inventory'
 import { listProducts } from '@/api/products'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -125,11 +125,6 @@ export const PosPage = () => {
     })
   }, [productsQuery.data, search])
 
-  const quoteMutation = useMutation({
-    mutationFn: getPosQuote,
-    onError: (unknownError) => setError(getApiErrorMessage(unknownError)),
-  })
-
   const lookupMutation = useMutation({
     mutationFn: ({
       documentType,
@@ -199,7 +194,6 @@ export const PosPage = () => {
       setLookupError(null)
       setLookupNotFound(false)
       setInvoiceRequested(false)
-      quoteMutation.reset()
       void queryClient.invalidateQueries({ queryKey: ['stock'] })
       void queryClient.invalidateQueries({ queryKey: ['kardex'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -364,22 +358,6 @@ export const PosPage = () => {
     customerMutation.mutate(payload)
   }
 
-  const recalculate = () => {
-    setError(null)
-    if (cartItems.length === 0) {
-      setError('Agrega al menos un producto al carrito.')
-      return
-    }
-
-    quoteMutation.mutate({
-      items: cartItems.map((item) => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-        unit_price_excl_tax: item.unitPriceExclTax,
-      })),
-    })
-  }
-
   const checkout = () => {
     setError(null)
     setMessage(null)
@@ -430,7 +408,7 @@ export const PosPage = () => {
           placeholder="Ej. Café, SKU-001, 770..."
         />
 
-        <div className="mt-4 max-h-[60vh] space-y-2 overflow-auto pr-1 scrollbar-thin">
+        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
           {filteredProducts.length === 0 ? (
             <EmptyState
               title="No se encontraron productos"
@@ -440,26 +418,32 @@ export const PosPage = () => {
             filteredProducts.map((product) => (
               <article
                 key={product.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"
+                className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-2">
                   <AuthenticatedImage
                     path={product.image_url}
                     alt={product.name}
-                    className="h-14 w-14 rounded-lg border border-slate-200 object-cover"
-                    fallbackClassName="h-14 w-14 rounded-lg border border-slate-200"
+                    className="h-10 w-10 rounded-md border border-slate-200 object-cover"
+                    fallbackClassName="h-10 w-10 rounded-md border border-slate-200"
                   />
-                  <div>
-                    <p className="font-semibold text-slate-800">{product.name}</p>
-                    <p className="text-xs text-slate-500">
-                      SKU: {product.sku} {product.barcode ? `| Cod: ${product.barcode}` : ''}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{product.name}</p>
+                    <p className="truncate text-[11px] text-slate-500">
+                      {product.sku}{product.barcode ? ` · ${product.barcode}` : ''}
                     </p>
-                    <p className="text-sm text-slate-700">{formatCurrencyCOP(product.final_price_incl_tax)}</p>
+                    <p className="text-xs font-medium text-slate-700">
+                      {formatCurrencyCOP(product.final_price_incl_tax)}
+                    </p>
                   </div>
                 </div>
-                <Button type="button" onClick={(): void => addToCart(product)}>
-                  <Plus size={16} className="mr-1" />
-                  Agregar
+                <Button
+                  type="button"
+                  className="shrink-0 px-2.5 py-1.5"
+                  onClick={(): void => addToCart(product)}
+                >
+                  <Plus size={14} className="sm:mr-1" />
+                  <span className="hidden sm:inline">Agregar</span>
                 </Button>
               </article>
             ))
@@ -470,6 +454,7 @@ export const PosPage = () => {
       <Card
         title="Carrito"
         subtitle="Calcula subtotal, IVA y total"
+        className="xl:sticky xl:top-4 xl:self-start"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={(): void => setRecentOpen(true)}>
@@ -712,27 +697,24 @@ export const PosPage = () => {
           <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div>
         ) : null}
 
-        {quoteMutation.data ? (
-          <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-slate-700">
-            <div className="flex items-center justify-between">
-              <span>Subtotal</span>
-              <strong>{formatCurrencyCOP(quoteMutation.data.subtotal)}</strong>
+        {cartItems.length > 0 ? (
+          <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-slate-700">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Subtotal</p>
+              <p className="font-semibold">{formatCurrencyCOP(cartTotals.subtotal)}</p>
             </div>
-            <div className="mt-1 flex items-center justify-between">
-              <span>IVA</span>
-              <strong>{formatCurrencyCOP(quoteMutation.data.tax_total)}</strong>
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">IVA</p>
+              <p className="font-semibold">{formatCurrencyCOP(cartTotals.tax)}</p>
             </div>
-            <div className="mt-1 flex items-center justify-between text-base">
-              <span>Total</span>
-              <strong>{formatCurrencyCOP(quoteMutation.data.total)}</strong>
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">Total</p>
+              <p className="text-base font-bold text-slate-900">{formatCurrencyCOP(cartTotals.total)}</p>
             </div>
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={recalculate} loading={quoteMutation.isPending}>
-            Recalcular
-          </Button>
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
           <Button type="button" onClick={checkout} loading={saleMutation.isPending}>
             Confirmar venta
           </Button>

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Boxes, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Boxes, Eye, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { getApiErrorMessage } from '@/api/client'
@@ -60,6 +60,7 @@ export const InventoryPage = () => {
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState<NewProductForm>(() => emptyNewProduct())
   const [newError, setNewError] = useState<string | null>(null)
+  const [detailRow, setDetailRow] = useState<CurrentStockRow | null>(null)
   const [addRow, setAddRow] = useState<CurrentStockRow | null>(null)
   const [addQuantity, setAddQuantity] = useState('1')
   const [addError, setAddError] = useState<string | null>(null)
@@ -409,12 +410,10 @@ export const InventoryPage = () => {
               className="mt-4"
               columns={[
                 'Producto',
-                { label: 'Bodega', className: 'hidden lg:table-cell' },
-                'Precio venta',
-                { label: 'Costo', className: 'hidden xl:table-cell' },
                 'Stock',
                 'Vendidos',
                 'Total vendido',
+                'Precio',
                 'Estado',
                 'Acciones',
               ]}
@@ -425,65 +424,73 @@ export const InventoryPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="hidden px-3 py-2 lg:table-cell">{row.warehouse_name}</td>
-                  <td className="px-2.5 py-2 font-semibold sm:px-3">
-                    {formatCurrencyCOP(row.sale_price_excl_tax)}
-                  </td>
-                  <td className="hidden px-3 py-2 xl:table-cell">{formatCurrencyCOP(row.cost_price)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 0)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 0)}</td>
                   <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
+                  <td className="px-2.5 py-2 font-semibold sm:px-3">
+                    {formatCurrencyCOP(row.sale_price_excl_tax)}
+                  </td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
                       {row.is_low_stock ? 'Bajo' : 'Normal'}
                     </Badge>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
-                    {canManage ? (
-                      <div className="flex flex-nowrap items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="px-2.5 py-1.5"
-                          aria-label={`Agregar unidades a ${row.product_name}`}
-                          title="Agregar unidades"
-                          onClick={(): void => {
-                            setAddRow(row)
-                            setAddQuantity('1')
-                            setAddError(null)
-                            setMessage(null)
-                          }}
-                        >
-                          <PackagePlus size={14} />
-                          <span className="ml-1 hidden sm:inline">Agregar unidades</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="px-2.5 py-1.5"
-                          aria-label={`Editar ${row.product_name}`}
-                          title="Editar producto"
-                          onClick={(): void => openEdit(row)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
-                        {isAdmin ? (
+                    <div className="flex flex-nowrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="px-2.5 py-1.5"
+                        aria-label={`Ver detalle de ${row.product_name}`}
+                        title="Ver detalle"
+                        onClick={(): void => setDetailRow(row)}
+                      >
+                        <Eye size={14} />
+                      </Button>
+                      {canManage ? (
+                        <>
                           <Button
                             type="button"
-                            variant="danger"
+                            variant="secondary"
                             className="px-2.5 py-1.5"
-                            aria-label={`Eliminar ${row.product_name}`}
-                            title="Eliminar producto"
-                            disabled={deleteMutation.isPending}
-                            onClick={(): void => handleDelete(row)}
+                            aria-label={`Agregar unidades a ${row.product_name}`}
+                            title="Agregar unidades"
+                            onClick={(): void => {
+                              setAddRow(row)
+                              setAddQuantity('1')
+                              setAddError(null)
+                              setMessage(null)
+                            }}
                           >
-                            <Trash2 size={14} />
+                            <PackagePlus size={14} />
+                            <span className="ml-1 hidden xl:inline">Agregar</span>
                           </Button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">Solo lectura</span>
-                    )}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="px-2.5 py-1.5"
+                            aria-label={`Editar ${row.product_name}`}
+                            title="Editar producto"
+                            onClick={(): void => openEdit(row)}
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                          {isAdmin ? (
+                            <Button
+                              type="button"
+                              variant="danger"
+                              className="px-2.5 py-1.5"
+                              aria-label={`Eliminar ${row.product_name}`}
+                              title="Eliminar producto"
+                              disabled={deleteMutation.isPending}
+                              onClick={(): void => handleDelete(row)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -781,6 +788,94 @@ export const InventoryPage = () => {
               </Button>
             </div>
           </form>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={detailRow !== null}
+        onClose={(): void => setDetailRow(null)}
+        title="Detalle del producto"
+        description="Información completa sin saturar la tabla principal."
+        className="max-w-xl"
+      >
+        {detailRow ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-lg font-semibold text-slate-800">{detailRow.product_name}</p>
+              <p className="text-sm text-slate-500">
+                SKU: {detailRow.sku} {detailRow.barcode ? `· Cod: ${detailRow.barcode}` : ''}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div>
+                <p className="text-xs text-slate-500">Bodega</p>
+                <p className="font-semibold text-slate-800">{detailRow.warehouse_name}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Estado</p>
+                <Badge variant={detailRow.is_low_stock ? 'warning' : 'success'}>
+                  {detailRow.is_low_stock ? 'Stock bajo' : 'Normal'}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Precio venta</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.sale_price_excl_tax)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Costo</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.cost_price)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Stock actual</p>
+                <p className="text-lg font-bold text-slate-800">{formatNumber(detailRow.current_stock, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Stock mínimo</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.min_stock, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Vendidos</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.sold_quantity, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Total vendido</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.sold_total)}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              {canManage ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={(): void => {
+                      setAddRow(detailRow)
+                      setAddQuantity('1')
+                      setDetailRow(null)
+                    }}
+                  >
+                    <PackagePlus size={16} className="mr-1" />
+                    Agregar unidades
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={(): void => {
+                      openEdit(detailRow)
+                      setDetailRow(null)
+                    }}
+                  >
+                    <Pencil size={16} className="mr-1" />
+                    Editar
+                  </Button>
+                </>
+              ) : null}
+              <Button type="button" variant="ghost" onClick={(): void => setDetailRow(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
         ) : null}
       </Modal>
     </div>
