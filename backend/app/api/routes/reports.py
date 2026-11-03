@@ -88,12 +88,13 @@ def low_stock(
     sold = (
         select(
             SaleItem.product_id.label("product_id"),
+            Sale.warehouse_id.label("warehouse_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.status == DocStatus.CONFIRMED)
-        .group_by(SaleItem.product_id)
+        .group_by(SaleItem.product_id, Sale.warehouse_id)
     ).subquery()
 
     stmt = (
@@ -125,7 +126,10 @@ def low_stock(
                 InventoryBalance.warehouse_id == Warehouse.id,
             ),
         )
-        .outerjoin(sold, sold.c.product_id == Product.id)
+        .outerjoin(
+            sold,
+            and_(sold.c.product_id == Product.id, sold.c.warehouse_id == Warehouse.id),
+        )
         .where(
             Product.is_active.is_(True),
             Warehouse.is_active.is_(True),

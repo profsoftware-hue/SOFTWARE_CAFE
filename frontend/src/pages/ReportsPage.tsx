@@ -61,8 +61,8 @@ export const ReportsPage = () => {
         row.product_name,
         row.sku,
         row.warehouse_name,
-        row.current_stock,
-        row.min_stock,
+        Math.round(Number(row.current_stock)),
+        Math.round(Number(row.min_stock)),
       ]),
     )
   }
@@ -76,7 +76,7 @@ export const ReportsPage = () => {
       topProductsQuery.data.map((row) => [
         row.product_name,
         row.sku,
-        row.units_sold,
+        Math.round(Number(row.units_sold)),
         row.subtotal,
         row.tax_total,
         row.total,
@@ -226,8 +226,8 @@ export const ReportsPage = () => {
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
                   <td className="px-3 py-2.5">{row.warehouse_name}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 3)}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 3)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 0)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 0)}</td>
                 </tr>
               ))}
             </Table>
@@ -252,7 +252,7 @@ export const ReportsPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 2)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 0)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.subtotal)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.tax_total)}</td>
                   <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>

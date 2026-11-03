@@ -527,6 +527,7 @@ def current_stock(
     sold_stmt = (
         select(
             SaleItem.product_id.label("product_id"),
+            Sale.warehouse_id.label("warehouse_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
@@ -538,7 +539,7 @@ def current_stock(
     if sold_to is not None:
         sold_stmt = sold_stmt.where(Sale.sold_at <= sold_to)
 
-    sold = sold_stmt.group_by(SaleItem.product_id).subquery()
+    sold = sold_stmt.group_by(SaleItem.product_id, Sale.warehouse_id).subquery()
 
     stmt = (
         select(
@@ -566,7 +567,10 @@ def current_stock(
             InventoryBalance,
             and_(InventoryBalance.product_id == Product.id, InventoryBalance.warehouse_id == Warehouse.id),
         )
-        .outerjoin(sold, sold.c.product_id == Product.id)
+        .outerjoin(
+            sold,
+            and_(sold.c.product_id == Product.id, sold.c.warehouse_id == Warehouse.id),
+        )
         .where(Product.is_active.is_(True), Warehouse.is_active.is_(True))
     )
 

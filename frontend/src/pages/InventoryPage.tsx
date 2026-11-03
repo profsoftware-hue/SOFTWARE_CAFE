@@ -184,8 +184,8 @@ export const InventoryPage = () => {
     setEditError(null)
 
     const name = editForm.name.trim()
-    const price = Number(editForm.sale_price_excl_tax)
-    const cost = Number(editForm.cost_price)
+    const price = Math.round(Number(editForm.sale_price_excl_tax))
+    const cost = Math.round(Number(editForm.cost_price))
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(cost) || cost < 0) {
       setEditError('Completa nombre, precio y costo con valores válidos.')
@@ -209,8 +209,8 @@ export const InventoryPage = () => {
     setNewError(null)
 
     const name = newForm.name.trim()
-    const price = Number(newForm.sale_price_excl_tax)
-    const quantity = Number(newForm.quantity)
+    const price = Math.round(Number(newForm.sale_price_excl_tax))
+    const quantity = Math.round(Number(newForm.quantity))
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(quantity) || quantity <= 0) {
       setNewError('Completa nombre, precio y una cantidad mayor a cero.')
@@ -221,7 +221,7 @@ export const InventoryPage = () => {
       name,
       quantity,
       sale_price_excl_tax: price,
-      cost_price: Number(newForm.cost_price) || 0,
+      cost_price: Math.round(Number(newForm.cost_price)) || 0,
       vat_rate: Number(newForm.vat_rate),
       sku: newForm.sku.trim() || undefined,
     })
@@ -232,7 +232,7 @@ export const InventoryPage = () => {
     if (!addRow) return
     setAddError(null)
 
-    const quantity = Number(addQuantity)
+    const quantity = Math.round(Number(addQuantity))
     if (Number.isNaN(quantity) || quantity <= 0) {
       setAddError('Ingresa una cantidad mayor a cero.')
       return
@@ -280,10 +280,10 @@ export const InventoryPage = () => {
         row.warehouse_name,
         row.sale_price_excl_tax,
         row.cost_price,
-        row.current_stock,
-        row.sold_quantity,
+        Math.round(Number(row.current_stock)),
+        Math.round(Number(row.sold_quantity)),
         row.sold_total,
-        row.min_stock,
+        Math.round(Number(row.min_stock)),
       ]),
     )
   }
@@ -423,8 +423,8 @@ export const InventoryPage = () => {
                     {formatCurrencyCOP(row.sale_price_excl_tax)}
                   </td>
                   <td className="hidden px-3 py-2 xl:table-cell">{formatCurrencyCOP(row.cost_price)}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 0)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 0)}</td>
                   <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
@@ -548,7 +548,7 @@ export const InventoryPage = () => {
                   <td className="px-2.5 py-2 sm:px-3">#{movement.warehouse_id}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.movement_type}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.direction}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 3)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 0)}</td>
                   <td className="hidden px-3 py-2 2xl:table-cell">
                     {movement.unit_cost ? formatCurrencyCOP(movement.unit_cost) : '-'}
                   </td>
@@ -580,7 +580,7 @@ export const InventoryPage = () => {
               label="Precio de venta *"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               value={newForm.sale_price_excl_tax}
               onChange={(event): void =>
                 setNewForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
@@ -590,8 +590,8 @@ export const InventoryPage = () => {
             <Input
               label="Cantidad inicial *"
               type="number"
-              min="0.001"
-              step="0.001"
+              min="1"
+              step="1"
               value={newForm.quantity}
               onChange={(event): void => setNewForm((prev) => ({ ...prev, quantity: event.target.value }))}
               required
@@ -600,7 +600,7 @@ export const InventoryPage = () => {
               label="Costo unitario (solo una vez)"
               type="number"
               min="0"
-              step="0.01"
+              step="1"
               value={newForm.cost_price}
               onChange={(event): void => setNewForm((prev) => ({ ...prev, cost_price: event.target.value }))}
               placeholder="0"
@@ -658,7 +658,7 @@ export const InventoryPage = () => {
                   Costo registrado: <strong>{formatCurrencyCOP(addRow.cost_price)}</strong>
                 </p>
                 <p>
-                  Stock actual: <strong>{formatNumber(addRow.current_stock, 3)}</strong>
+                  Stock actual: <strong>{formatNumber(addRow.current_stock, 0)}</strong>
                 </p>
               </div>
             </div>
@@ -666,8 +666,8 @@ export const InventoryPage = () => {
             <Input
               label="Unidades que llegaron *"
               type="number"
-              min="0.001"
-              step="0.001"
+              min="1"
+              step="1"
               value={addQuantity}
               onChange={(event): void => setAddQuantity(event.target.value)}
               required
@@ -704,7 +704,7 @@ export const InventoryPage = () => {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">{editRow.product_name}</p>
               <p className="text-xs text-slate-500">
-                Stock actual: {formatNumber(editRow.current_stock, 3)} · SKU: {editRow.sku}
+                Stock actual: {formatNumber(editRow.current_stock, 0)} · SKU: {editRow.sku}
               </p>
             </div>
 
@@ -720,7 +720,7 @@ export const InventoryPage = () => {
                 label="Precio de venta *"
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={editForm.sale_price_excl_tax}
                 onChange={(event): void =>
                   setEditForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
@@ -731,7 +731,7 @@ export const InventoryPage = () => {
                 label="Costo unitario *"
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={editForm.cost_price}
                 onChange={(event): void =>
                   setEditForm((prev) => ({ ...prev, cost_price: event.target.value }))

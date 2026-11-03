@@ -77,6 +77,7 @@ export const PosPage = () => {
   const [customerForm, setCustomerForm] = useState<CustomerFormState>(() => emptyCustomerForm())
   const [customerFormError, setCustomerFormError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH')
+  const [cashReceived, setCashReceived] = useState('')
   const [note, setNote] = useState('')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [message, setMessage] = useState<string | null>(null)
@@ -94,6 +95,19 @@ export const PosPage = () => {
   const selectedWarehouseId = warehouseId || (defaultWarehouse ? String(defaultWarehouse.id) : '')
 
   const cartItems = useMemo(() => Object.values(cart), [cart])
+  const cartTotals = useMemo(() => {
+    let subtotal = 0
+    let tax = 0
+    for (const item of cartItems) {
+      const lineSubtotal = Math.round(item.quantity * item.unitPriceExclTax * 100) / 100
+      const lineTax = Math.round(lineSubtotal * Number(item.product.vat_rate) * 100) / 100
+      subtotal += lineSubtotal
+      tax += lineTax
+    }
+    return { subtotal, tax, total: subtotal + tax }
+  }, [cartItems])
+  const cashReceivedNumber = Number(cashReceived)
+  const changeDue = Number.isFinite(cashReceivedNumber) ? cashReceivedNumber - cartTotals.total : -cartTotals.total
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -171,6 +185,7 @@ export const PosPage = () => {
       setError(null)
       setCart({})
       setNote('')
+      setCashReceived('')
       setCustomerMode('FINAL')
       setSelectedCustomer(null)
       setLookupDocNumber('')
@@ -379,6 +394,10 @@ export const PosPage = () => {
       setError('Selecciona un cliente identificado para la factura electrónica.')
       return
     }
+    if (paymentMethod === 'CASH' && cashReceived.trim() && changeDue < 0) {
+      setError('El efectivo recibido es menor al total de la venta.')
+      return
+    }
 
     saleMutation.mutate({
       warehouse_id: Number(selectedWarehouseId),
@@ -494,6 +513,61 @@ export const PosPage = () => {
           </Select>
           <Input label="Nota" value={note} onChange={(event): void => setNote(event.target.value)} />
 
+          {paymentMethod === 'CASH' ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 md:col-span-2">
+              <p className="text-sm font-semibold text-slate-800">Caja registradora</p>
+              <p className="text-xs text-slate-500">Calcula cuánto debes devolver al recibir efectivo.</p>
+              <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                <Input
+                  label="Efectivo recibido"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={cashReceived}
+                  onChange={(event): void => setCashReceived(event.target.value)}
+                  placeholder="Ej. 50000"
+                />
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-xs text-slate-500">Total a cobrar</p>
+                  <p className="text-lg font-bold text-slate-800">{formatCurrencyCOP(cartTotals.total)}</p>
+                </div>
+                <div
+                  className={`rounded-lg border px-3 py-2 ${
+                    !cashReceived.trim()
+                      ? 'border-slate-200 bg-white'
+                      : changeDue < 0
+                        ? 'border-rose-200 bg-rose-50'
+                        : 'border-emerald-200 bg-white'
+                  }`}
+                >
+                  <p className="text-xs text-slate-500">
+                    {cashReceived.trim() && changeDue < 0 ? 'Falta por cubrir' : 'Devuelta'}
+                  </p>
+                  <p className={`text-lg font-bold ${changeDue < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {!cashReceived.trim()
+                      ? '—'
+                      : formatCurrencyCOP(Math.abs(changeDue))}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {[10000, 20000, 50000, 100000].map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant="ghost"
+                    onClick={(): void => setCashReceived(String(value))}
+                  >
+                    {formatCurrencyCOP(value)}
+                  </Button>
+                ))}
+                <Button type="button" variant="ghost" onClick={(): void => setCashReceived('')}>
+                  Limpiar
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           {customerMode === 'CUSTOMER' ? (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
             <p className="text-sm font-semibold text-slate-800">Buscar tercero existente</p>
@@ -603,7 +677,7 @@ export const PosPage = () => {
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="min-w-8 text-center text-sm font-semibold">{formatNumber(item.quantity, 3)}</span>
+                    <span className="min-w-8 text-center text-sm font-semibold">{formatNumber(item.quantity, 0)}</span>
                     <button
                       type="button"
                       className="rounded p-1 text-slate-600 hover:bg-slate-100"

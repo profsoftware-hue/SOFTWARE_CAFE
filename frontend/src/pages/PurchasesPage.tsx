@@ -170,8 +170,8 @@ export const PurchasesPage = () => {
                 <Input
                   label="Cantidad"
                   type="number"
-                  min="0.001"
-                  step="0.001"
+                  min="1"
+                  step="1"
                   value={line.quantity}
                   onChange={(event): void => updateLine(index, { quantity: event.target.value })}
                   required
@@ -182,7 +182,7 @@ export const PurchasesPage = () => {
                   label="Costo"
                   type="number"
                   min="0"
-                  step="0.01"
+                  step="1"
                   value={line.unit_cost}
                   onChange={(event): void => updateLine(index, { unit_cost: event.target.value })}
                   required
