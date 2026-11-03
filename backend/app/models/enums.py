@@ -20,6 +20,20 @@ class PaymentMethod(str, Enum):
     CREDIT = "CREDIT"
 
 
+class CustomerType(str, Enum):
+    NATURAL = "NATURAL"
+    COMPANY = "COMPANY"
+
+
+class DocumentType(str, Enum):
+    CC = "CC"
+    CE = "CE"
+    NIT = "NIT"
+    TI = "TI"
+    PPT = "PPT"
+    PASSPORT = "PASSPORT"
+
+
 class MovementType(str, Enum):
     PURCHASE = "PURCHASE"
     CUSTOMER_RETURN = "CUSTOMER_RETURN"
@@ -49,6 +63,22 @@ DOC_STATUS_ENUM = SAEnum(
 PAYMENT_METHOD_ENUM = SAEnum(
     PaymentMethod,
     name="payment_method",
+    schema="ccp",
+    create_type=False,
+    validate_strings=True,
+)
+
+CUSTOMER_TYPE_ENUM = SAEnum(
+    CustomerType,
+    name="customer_type",
+    schema="ccp",
+    create_type=False,
+    validate_strings=True,
+)
+
+DOCUMENT_TYPE_ENUM = SAEnum(
+    DocumentType,
+    name="document_type",
     schema="ccp",
     create_type=False,
     validate_strings=True,

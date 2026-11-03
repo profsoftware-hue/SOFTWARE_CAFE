@@ -29,6 +29,7 @@ from app.schemas.inventory import (
     PosQuoteRequest,
     PosQuoteResponse,
     PurchaseCreate,
+    RecentSaleOut,
     SaleCreate,
     SaleReceiptItemOut,
     SaleReceiptOut,
@@ -215,10 +216,35 @@ def create_sale(
     if not warehouse:
         raise HTTPException(status_code=404, detail="Bodega no encontrada")
 
+    customer: Customer | None = None
     if payload.customer_id is not None:
         customer = db.get(Customer, payload.customer_id)
         if not customer:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    if payload.invoice_requested:
+        if customer is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Selecciona o crea el cliente para la factura electrónica",
+            )
+        missing: list[str] = []
+        if customer.customer_type.value == "NATURAL":
+            if not (customer.first_name and customer.last_name):
+                missing.append("nombres y apellidos")
+        elif not (customer.business_name or customer.name):
+            missing.append("razón social")
+        if not customer.document_number:
+            missing.append("número de documento")
+        if not customer.email:
+            missing.append("correo electrónico")
+        if not customer.phone:
+            missing.append("teléfono")
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail="Datos de facturación incompletos: " + ", ".join(missing),
+            )
 
     product_ids = {item.product_id for item in payload.items}
     products = db.scalars(select(Product).where(Product.id.in_(product_ids), Product.is_active.is_(True))).all()
@@ -258,6 +284,12 @@ def create_sale(
         sold_at=payload.sold_at or _now_utc(),
         status=DocStatus.DRAFT,
         payment_method=payload.payment_method,
+        invoice_requested=payload.invoice_requested,
+        invoice_customer_name=customer.name if payload.invoice_requested and customer else None,
+        invoice_customer_document_type=customer.document_type if payload.invoice_requested and customer else None,
+        invoice_customer_document_number=customer.document_number if payload.invoice_requested and customer else None,
+        invoice_customer_email=customer.email if payload.invoice_requested and customer else None,
+        invoice_customer_phone=customer.phone if payload.invoice_requested and customer else None,
         note=payload.note,
         created_by=current_user.id,
         updated_by=current_user.id,
@@ -300,6 +332,32 @@ def create_sale(
     return _build_document_out(sale, "sale_number")
 
 
+@router.get("/sales/recent", response_model=list[RecentSaleOut])
+def recent_sales(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permissions("sales.create")),
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list[RecentSaleOut]:
+    stmt = (
+        select(
+            Sale.id,
+            Sale.sale_number,
+            Sale.sold_at,
+            Sale.payment_method,
+            Customer.name.label("customer_name"),
+            Sale.invoice_requested,
+            Sale.total,
+            Sale.status,
+        )
+        .outerjoin(Customer, Customer.id == Sale.customer_id)
+        .where(Sale.status == DocStatus.CONFIRMED)
+        .order_by(desc(Sale.sold_at), desc(Sale.id))
+        .limit(limit)
+    )
+    rows = db.execute(stmt).mappings().all()
+    return [RecentSaleOut(**row) for row in rows]
+
+
 @router.get("/sales/{sale_id}/receipt", response_model=SaleReceiptOut)
 def get_sale_receipt(
     sale_id: int,
@@ -326,6 +384,12 @@ def get_sale_receipt(
         status=sale.status,
         payment_method=sale.payment_method,
         customer_name=customer.name if customer else None,
+        invoice_requested=sale.invoice_requested,
+        invoice_customer_name=sale.invoice_customer_name,
+        invoice_customer_document_type=sale.invoice_customer_document_type,
+        invoice_customer_document_number=sale.invoice_customer_document_number,
+        invoice_customer_email=sale.invoice_customer_email,
+        invoice_customer_phone=sale.invoice_customer_phone,
         warehouse_name=warehouse.name if warehouse else "Bodega principal",
         seller_name=(seller.full_name or seller.username) if seller else None,
         company_name=company.name if company else "FUNDACION NUESTRO FUTURO",
@@ -463,6 +527,7 @@ def current_stock(
     sold_stmt = (
         select(
             SaleItem.product_id.label("product_id"),
+            Sale.warehouse_id.label("warehouse_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
@@ -474,7 +539,7 @@ def current_stock(
     if sold_to is not None:
         sold_stmt = sold_stmt.where(Sale.sold_at <= sold_to)
 
-    sold = sold_stmt.group_by(SaleItem.product_id).subquery()
+    sold = sold_stmt.group_by(SaleItem.product_id, Sale.warehouse_id).subquery()
 
     stmt = (
         select(
@@ -502,7 +567,10 @@ def current_stock(
             InventoryBalance,
             and_(InventoryBalance.product_id == Product.id, InventoryBalance.warehouse_id == Warehouse.id),
         )
-        .outerjoin(sold, sold.c.product_id == Product.id)
+        .outerjoin(
+            sold,
+            and_(sold.c.product_id == Product.id, sold.c.warehouse_id == Warehouse.id),
+        )
         .where(Product.is_active.is_(True), Warehouse.is_active.is_(True))
     )
 

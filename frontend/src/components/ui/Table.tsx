@@ -14,7 +14,7 @@ export const Table = ({ columns, children, className }: TableProps) => {
   return (
     <div className={cn('w-full max-w-full overflow-auto rounded-lg border border-slate-200', className)}>
       <table className="min-w-full divide-y divide-slate-200 text-left text-xs sm:text-sm">
-        <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
           <tr>
             {columns.map((column) => {
               const label = typeof column === 'string' ? column : column.label

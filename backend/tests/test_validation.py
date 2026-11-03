@@ -2,6 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.api.routes.roles import ROLE_CODE_PATTERN
+from app.models.enums import CustomerType, DocumentType
+from app.schemas.catalogs import CustomerCreate
 from app.schemas.product import QuickProductCreate, StockEntryCreate
 from app.schemas.user import RoleCreate, RoleUpdate, UserCreate, UserUpdate
 
@@ -61,3 +63,51 @@ def test_quick_product_rejects_non_positive_quantity() -> None:
 def test_stock_entry_requires_positive_quantity() -> None:
     with pytest.raises(ValidationError):
         StockEntryCreate(quantity=0)
+
+
+def test_natural_customer_requires_first_and_last_name() -> None:
+    with pytest.raises(ValidationError):
+        CustomerCreate(
+            customer_type=CustomerType.NATURAL,
+            first_name="Ana",
+            document_type=DocumentType.CC,
+            document_number="123",
+            email="ana@example.com",
+            phone="3001234567",
+        )
+
+
+def test_natural_customer_builds_display_name() -> None:
+    customer = CustomerCreate(
+        customer_type=CustomerType.NATURAL,
+        first_name="Ana",
+        last_name="Pérez",
+        document_type=DocumentType.CC,
+        document_number="123",
+        email="ana@example.com",
+        phone="3001234567",
+    )
+    assert customer.resolved_name() == "Ana Pérez"
+
+
+def test_company_customer_uses_business_name() -> None:
+    customer = CustomerCreate(
+        customer_type=CustomerType.COMPANY,
+        business_name="Tercero S.A.S.",
+        document_type=DocumentType.NIT,
+        document_number="900123456-7",
+        email="factura@tercero.com",
+        phone="6011234567",
+    )
+    assert customer.resolved_name() == "Tercero S.A.S."
+
+
+def test_company_customer_requires_business_name() -> None:
+    with pytest.raises(ValidationError):
+        CustomerCreate(
+            customer_type=CustomerType.COMPANY,
+            document_type=DocumentType.NIT,
+            document_number="900123456-7",
+            email="factura@tercero.com",
+            phone="6011234567",
+        )

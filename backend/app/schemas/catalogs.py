@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+
+from app.models.enums import CustomerType, DocumentType
 
 
 class CategoryCreate(BaseModel):
@@ -43,11 +45,30 @@ class SupplierOut(BaseModel):
 
 
 class CustomerCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=150)
+    name: str | None = Field(default=None, min_length=2, max_length=150)
+    customer_type: CustomerType = CustomerType.NATURAL
+    first_name: str | None = Field(default=None, max_length=80)
+    last_name: str | None = Field(default=None, max_length=80)
+    business_name: str | None = Field(default=None, max_length=180)
+    document_type: DocumentType = DocumentType.CC
     document_number: str | None = Field(default=None, max_length=30)
     phone: str | None = Field(default=None, max_length=40)
     email: EmailStr | None = None
     address: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_identity(self) -> "CustomerCreate":
+        if self.customer_type == CustomerType.NATURAL:
+            if not (self.first_name and self.first_name.strip() and self.last_name and self.last_name.strip()):
+                raise ValueError("Para persona natural ingresa nombres y apellidos")
+        elif not (self.business_name and self.business_name.strip()) and not (self.name and self.name.strip()):
+            raise ValueError("Para persona jurídica ingresa la razón social")
+        return self
+
+    def resolved_name(self) -> str:
+        if self.customer_type == CustomerType.NATURAL:
+            return f"{(self.first_name or '').strip()} {(self.last_name or '').strip()}".strip()
+        return ((self.business_name or self.name or "").strip())
 
 
 class CustomerOut(BaseModel):
@@ -55,6 +76,11 @@ class CustomerOut(BaseModel):
 
     id: int
     name: str
+    customer_type: CustomerType
+    first_name: str | None
+    last_name: str | None
+    business_name: str | None
+    document_type: DocumentType
     document_number: str | None
     phone: str | None
     email: EmailStr | None

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Boxes, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Boxes, Eye, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { getApiErrorMessage } from '@/api/client'
@@ -17,7 +17,14 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
 import { downloadCsv } from '@/lib/csv'
-import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
+import {
+  formatCurrencyCOP,
+  formatDateTime,
+  formatNumber,
+  formatThousands,
+  parseThousands,
+  toISODate,
+} from '@/lib/format'
 import type { CurrentStockRow } from '@/types/api'
 
 type InventoryTab = 'products' | 'kardex'
@@ -53,6 +60,7 @@ export const InventoryPage = () => {
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState<NewProductForm>(() => emptyNewProduct())
   const [newError, setNewError] = useState<string | null>(null)
+  const [detailRow, setDetailRow] = useState<CurrentStockRow | null>(null)
   const [addRow, setAddRow] = useState<CurrentStockRow | null>(null)
   const [addQuantity, setAddQuantity] = useState('1')
   const [addError, setAddError] = useState<string | null>(null)
@@ -168,8 +176,8 @@ export const InventoryPage = () => {
     setEditRow(row)
     setEditForm({
       name: row.product_name,
-      sale_price_excl_tax: row.sale_price_excl_tax,
-      cost_price: row.cost_price,
+      sale_price_excl_tax: formatThousands(row.sale_price_excl_tax),
+      cost_price: formatThousands(row.cost_price),
       vat_rate: row.vat_rate,
       sku: row.sku,
     })
@@ -184,8 +192,8 @@ export const InventoryPage = () => {
     setEditError(null)
 
     const name = editForm.name.trim()
-    const price = Number(editForm.sale_price_excl_tax)
-    const cost = Number(editForm.cost_price)
+    const price = parseThousands(editForm.sale_price_excl_tax)
+    const cost = parseThousands(editForm.cost_price)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(cost) || cost < 0) {
       setEditError('Completa nombre, precio y costo con valores válidos.')
@@ -209,8 +217,8 @@ export const InventoryPage = () => {
     setNewError(null)
 
     const name = newForm.name.trim()
-    const price = Number(newForm.sale_price_excl_tax)
-    const quantity = Number(newForm.quantity)
+    const price = parseThousands(newForm.sale_price_excl_tax)
+    const quantity = parseThousands(newForm.quantity)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(quantity) || quantity <= 0) {
       setNewError('Completa nombre, precio y una cantidad mayor a cero.')
@@ -221,7 +229,7 @@ export const InventoryPage = () => {
       name,
       quantity,
       sale_price_excl_tax: price,
-      cost_price: Number(newForm.cost_price) || 0,
+      cost_price: parseThousands(newForm.cost_price),
       vat_rate: Number(newForm.vat_rate),
       sku: newForm.sku.trim() || undefined,
     })
@@ -232,8 +240,8 @@ export const InventoryPage = () => {
     if (!addRow) return
     setAddError(null)
 
-    const quantity = Number(addQuantity)
-    if (Number.isNaN(quantity) || quantity <= 0) {
+    const quantity = parseThousands(addQuantity)
+    if (quantity <= 0) {
       setAddError('Ingresa una cantidad mayor a cero.')
       return
     }
@@ -280,10 +288,10 @@ export const InventoryPage = () => {
         row.warehouse_name,
         row.sale_price_excl_tax,
         row.cost_price,
-        row.current_stock,
-        row.sold_quantity,
+        Math.round(Number(row.current_stock)),
+        Math.round(Number(row.sold_quantity)),
         row.sold_total,
-        row.min_stock,
+        Math.round(Number(row.min_stock)),
       ]),
     )
   }
@@ -402,12 +410,10 @@ export const InventoryPage = () => {
               className="mt-4"
               columns={[
                 'Producto',
-                { label: 'Bodega', className: 'hidden lg:table-cell' },
-                'Precio venta',
-                { label: 'Costo', className: 'hidden xl:table-cell' },
                 'Stock',
                 'Vendidos',
                 'Total vendido',
+                'Precio',
                 'Estado',
                 'Acciones',
               ]}
@@ -418,65 +424,73 @@ export const InventoryPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="hidden px-3 py-2 lg:table-cell">{row.warehouse_name}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 0)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 0)}</td>
+                  <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
                   <td className="px-2.5 py-2 font-semibold sm:px-3">
                     {formatCurrencyCOP(row.sale_price_excl_tax)}
                   </td>
-                  <td className="hidden px-3 py-2 xl:table-cell">{formatCurrencyCOP(row.cost_price)}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
-                  <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
                       {row.is_low_stock ? 'Bajo' : 'Normal'}
                     </Badge>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
-                    {canManage ? (
-                      <div className="flex flex-nowrap items-center gap-1.5">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="px-2.5 py-1.5"
-                          aria-label={`Agregar unidades a ${row.product_name}`}
-                          title="Agregar unidades"
-                          onClick={(): void => {
-                            setAddRow(row)
-                            setAddQuantity('1')
-                            setAddError(null)
-                            setMessage(null)
-                          }}
-                        >
-                          <PackagePlus size={14} />
-                          <span className="ml-1 hidden sm:inline">Agregar unidades</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="px-2.5 py-1.5"
-                          aria-label={`Editar ${row.product_name}`}
-                          title="Editar producto"
-                          onClick={(): void => openEdit(row)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
-                        {isAdmin ? (
+                    <div className="flex flex-nowrap items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="px-2.5 py-1.5"
+                        aria-label={`Ver detalle de ${row.product_name}`}
+                        title="Ver detalle"
+                        onClick={(): void => setDetailRow(row)}
+                      >
+                        <Eye size={14} />
+                      </Button>
+                      {canManage ? (
+                        <>
                           <Button
                             type="button"
-                            variant="danger"
+                            variant="secondary"
                             className="px-2.5 py-1.5"
-                            aria-label={`Eliminar ${row.product_name}`}
-                            title="Eliminar producto"
-                            disabled={deleteMutation.isPending}
-                            onClick={(): void => handleDelete(row)}
+                            aria-label={`Agregar unidades a ${row.product_name}`}
+                            title="Agregar unidades"
+                            onClick={(): void => {
+                              setAddRow(row)
+                              setAddQuantity('1')
+                              setAddError(null)
+                              setMessage(null)
+                            }}
                           >
-                            <Trash2 size={14} />
+                            <PackagePlus size={14} />
+                            <span className="ml-1 hidden xl:inline">Agregar</span>
                           </Button>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">Solo lectura</span>
-                    )}
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="px-2.5 py-1.5"
+                            aria-label={`Editar ${row.product_name}`}
+                            title="Editar producto"
+                            onClick={(): void => openEdit(row)}
+                          >
+                            <Pencil size={14} />
+                          </Button>
+                          {isAdmin ? (
+                            <Button
+                              type="button"
+                              variant="danger"
+                              className="px-2.5 py-1.5"
+                              aria-label={`Eliminar ${row.product_name}`}
+                              title="Eliminar producto"
+                              disabled={deleteMutation.isPending}
+                              onClick={(): void => handleDelete(row)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -548,7 +562,7 @@ export const InventoryPage = () => {
                   <td className="px-2.5 py-2 sm:px-3">#{movement.warehouse_id}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.movement_type}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.direction}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 3)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 0)}</td>
                   <td className="hidden px-3 py-2 2xl:table-cell">
                     {movement.unit_cost ? formatCurrencyCOP(movement.unit_cost) : '-'}
                   </td>
@@ -578,31 +592,35 @@ export const InventoryPage = () => {
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Precio de venta *"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={newForm.sale_price_excl_tax}
               onChange={(event): void =>
-                setNewForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
+                setNewForm((prev) => ({
+                  ...prev,
+                  sale_price_excl_tax: formatThousands(event.target.value),
+                }))
               }
               required
             />
             <Input
               label="Cantidad inicial *"
-              type="number"
-              min="0.001"
-              step="0.001"
+              type="text"
+              inputMode="numeric"
               value={newForm.quantity}
-              onChange={(event): void => setNewForm((prev) => ({ ...prev, quantity: event.target.value }))}
+              onChange={(event): void =>
+                setNewForm((prev) => ({ ...prev, quantity: formatThousands(event.target.value) }))
+              }
               required
             />
             <Input
               label="Costo unitario (solo una vez)"
-              type="number"
-              min="0"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={newForm.cost_price}
-              onChange={(event): void => setNewForm((prev) => ({ ...prev, cost_price: event.target.value }))}
+              onChange={(event): void =>
+                setNewForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
+              }
               placeholder="0"
               helperText="Se guarda y ya no se vuelve a pedir."
             />
@@ -658,18 +676,17 @@ export const InventoryPage = () => {
                   Costo registrado: <strong>{formatCurrencyCOP(addRow.cost_price)}</strong>
                 </p>
                 <p>
-                  Stock actual: <strong>{formatNumber(addRow.current_stock, 3)}</strong>
+                  Stock actual: <strong>{formatNumber(addRow.current_stock, 0)}</strong>
                 </p>
               </div>
             </div>
 
             <Input
               label="Unidades que llegaron *"
-              type="number"
-              min="0.001"
-              step="0.001"
+              type="text"
+              inputMode="numeric"
               value={addQuantity}
-              onChange={(event): void => setAddQuantity(event.target.value)}
+              onChange={(event): void => setAddQuantity(formatThousands(event.target.value))}
               required
             />
 
@@ -704,7 +721,7 @@ export const InventoryPage = () => {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">{editRow.product_name}</p>
               <p className="text-xs text-slate-500">
-                Stock actual: {formatNumber(editRow.current_stock, 3)} · SKU: {editRow.sku}
+                Stock actual: {formatNumber(editRow.current_stock, 0)} · SKU: {editRow.sku}
               </p>
             </div>
 
@@ -718,23 +735,24 @@ export const InventoryPage = () => {
             <div className="grid gap-3 md:grid-cols-2">
               <Input
                 label="Precio de venta *"
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="numeric"
                 value={editForm.sale_price_excl_tax}
                 onChange={(event): void =>
-                  setEditForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
+                  setEditForm((prev) => ({
+                    ...prev,
+                    sale_price_excl_tax: formatThousands(event.target.value),
+                  }))
                 }
                 required
               />
               <Input
                 label="Costo unitario *"
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="numeric"
                 value={editForm.cost_price}
                 onChange={(event): void =>
-                  setEditForm((prev) => ({ ...prev, cost_price: event.target.value }))
+                  setEditForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
                 }
                 required
               />
@@ -770,6 +788,94 @@ export const InventoryPage = () => {
               </Button>
             </div>
           </form>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={detailRow !== null}
+        onClose={(): void => setDetailRow(null)}
+        title="Detalle del producto"
+        description="Información completa sin saturar la tabla principal."
+        className="max-w-xl"
+      >
+        {detailRow ? (
+          <div className="space-y-4">
+            <div>
+              <p className="text-lg font-semibold text-slate-800">{detailRow.product_name}</p>
+              <p className="text-sm text-slate-500">
+                SKU: {detailRow.sku} {detailRow.barcode ? `· Cod: ${detailRow.barcode}` : ''}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div>
+                <p className="text-xs text-slate-500">Bodega</p>
+                <p className="font-semibold text-slate-800">{detailRow.warehouse_name}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Estado</p>
+                <Badge variant={detailRow.is_low_stock ? 'warning' : 'success'}>
+                  {detailRow.is_low_stock ? 'Stock bajo' : 'Normal'}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Precio venta</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.sale_price_excl_tax)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Costo</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.cost_price)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Stock actual</p>
+                <p className="text-lg font-bold text-slate-800">{formatNumber(detailRow.current_stock, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Stock mínimo</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.min_stock, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Vendidos</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.sold_quantity, 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Total vendido</p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.sold_total)}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              {canManage ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={(): void => {
+                      setAddRow(detailRow)
+                      setAddQuantity('1')
+                      setDetailRow(null)
+                    }}
+                  >
+                    <PackagePlus size={16} className="mr-1" />
+                    Agregar unidades
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={(): void => {
+                      openEdit(detailRow)
+                      setDetailRow(null)
+                    }}
+                  >
+                    <Pencil size={16} className="mr-1" />
+                    Editar
+                  </Button>
+                </>
+              ) : null}
+              <Button type="button" variant="ghost" onClick={(): void => setDetailRow(null)}>
+                Cerrar
+              </Button>
+            </div>
+          </div>
         ) : null}
       </Modal>
     </div>

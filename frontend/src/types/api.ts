@@ -1,6 +1,8 @@
 export type RoleCode = string
 
 export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'QR' | 'MIXED' | 'CREDIT'
+export type CustomerType = 'NATURAL' | 'COMPANY'
+export type DocumentType = 'CC' | 'CE' | 'NIT' | 'TI' | 'PPT' | 'PASSPORT'
 
 export interface Permission {
   id: number
@@ -63,6 +65,11 @@ export interface Supplier {
 export interface Customer {
   id: number
   name: string
+  customer_type: CustomerType
+  first_name: string | null
+  last_name: string | null
+  business_name: string | null
+  document_type: DocumentType
   document_number: string | null
   phone: string | null
   email: string | null
@@ -141,6 +148,7 @@ export interface CreateSalePayload {
   customer_id?: number | null
   sold_at?: string | null
   payment_method: PaymentMethod
+  invoice_requested?: boolean
   note?: string | null
   items: SaleItemInput[]
   confirm: boolean
@@ -245,6 +253,17 @@ export interface SalesRange {
   total: string
 }
 
+export interface RecentSale {
+  id: number
+  sale_number: string
+  sold_at: string
+  payment_method: PaymentMethod
+  customer_name: string | null
+  invoice_requested: boolean
+  total: string
+  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+}
+
 export interface SaleReceiptItem {
   product_name: string
   barcode: string | null
@@ -263,6 +282,12 @@ export interface SaleReceipt {
   status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
   payment_method: PaymentMethod
   customer_name: string | null
+  invoice_requested: boolean
+  invoice_customer_name: string | null
+  invoice_customer_document_type: DocumentType | null
+  invoice_customer_document_number: string | null
+  invoice_customer_email: string | null
+  invoice_customer_phone: string | null
   warehouse_name: string
   seller_name: string | null
   company_name: string
@@ -281,6 +306,34 @@ export interface DailyClosingItem {
   quantity: string
   subtotal: string
   tax_total: string
+  total: string
+}
+
+export interface ThirdPartyReport {
+  customer_id: number
+  name: string
+  customer_type: CustomerType
+  document_type: DocumentType
+  document_number: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+  total_sales: string
+  invoice_count: number
+  total_invoiced: string
+  last_invoice_at: string | null
+}
+
+export interface InvoiceRequest {
+  sale_id: number
+  sale_number: string
+  sold_at: string
+  customer_name: string | null
+  document_type: DocumentType | null
+  document_number: string | null
+  email: string | null
+  phone: string | null
+  payment_method: PaymentMethod
   total: string
 }
 

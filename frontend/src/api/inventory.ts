@@ -7,6 +7,7 @@ import type {
   InventoryDocument,
   KardexRow,
   PosQuoteResponse,
+  RecentSale,
   SaleReceipt,
 } from '@/types/api'
 
@@ -22,6 +23,13 @@ export const createSale = async (payload: CreateSalePayload): Promise<InventoryD
 
 export const getSaleReceipt = async (saleId: number): Promise<SaleReceipt> => {
   const { data } = await apiClient.get<SaleReceipt>(`/inventory/sales/${saleId}/receipt`)
+  return data
+}
+
+export const listRecentSales = async (limit = 30): Promise<RecentSale[]> => {
+  const { data } = await apiClient.get<RecentSale[]>('/inventory/sales/recent', {
+    params: { limit },
+  })
   return data
 }
 

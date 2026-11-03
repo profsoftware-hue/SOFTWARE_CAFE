@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import AdjustmentType, DocStatus, PaymentMethod
+from app.models.enums import AdjustmentType, DocStatus, DocumentType, PaymentMethod
 
 
 class PurchaseItemIn(BaseModel):
@@ -37,6 +37,7 @@ class SaleCreate(BaseModel):
     customer_id: int | None = None
     sold_at: datetime | None = None
     payment_method: PaymentMethod = PaymentMethod.CASH
+    invoice_requested: bool = False
     note: str | None = None
     items: list[SaleItemIn]
     confirm: bool = True
@@ -148,6 +149,17 @@ class SalesByDateOut(BaseModel):
     total: Decimal
 
 
+class RecentSaleOut(BaseModel):
+    id: int
+    sale_number: str
+    sold_at: datetime
+    payment_method: PaymentMethod
+    customer_name: str | None
+    invoice_requested: bool
+    total: Decimal
+    status: DocStatus
+
+
 class SaleReceiptItemOut(BaseModel):
     product_name: str
     barcode: str | None
@@ -166,6 +178,12 @@ class SaleReceiptOut(BaseModel):
     status: DocStatus
     payment_method: PaymentMethod
     customer_name: str | None
+    invoice_requested: bool = False
+    invoice_customer_name: str | None = None
+    invoice_customer_document_type: DocumentType | None = None
+    invoice_customer_document_number: str | None = None
+    invoice_customer_email: str | None = None
+    invoice_customer_phone: str | None = None
     warehouse_name: str
     seller_name: str | None
     company_name: str

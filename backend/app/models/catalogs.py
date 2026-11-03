@@ -6,6 +6,7 @@ from sqlalchemy import Boolean, DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.enums import CUSTOMER_TYPE_ENUM, DOCUMENT_TYPE_ENUM, CustomerType, DocumentType
 
 
 class ProductCategory(Base):
@@ -45,6 +46,19 @@ class Customer(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    customer_type: Mapped[CustomerType] = mapped_column(
+        CUSTOMER_TYPE_ENUM,
+        nullable=False,
+        server_default=CustomerType.NATURAL.value,
+    )
+    first_name: Mapped[str | None] = mapped_column(String(80))
+    last_name: Mapped[str | None] = mapped_column(String(80))
+    business_name: Mapped[str | None] = mapped_column(String(180))
+    document_type: Mapped[DocumentType] = mapped_column(
+        DOCUMENT_TYPE_ENUM,
+        nullable=False,
+        server_default=DocumentType.CC.value,
+    )
     document_number: Mapped[str | None] = mapped_column(String(30), unique=True)
     phone: Mapped[str | None] = mapped_column(String(40))
     email: Mapped[str | None] = mapped_column(String(120))

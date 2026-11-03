@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 
-import { getDailyClosing, getInventoryValue, getLowStock, getSalesRange, getTopProducts } from '@/api/reports'
+import {
+  getDailyClosing,
+  getInventoryValue,
+  getInvoiceRequests,
+  getLowStock,
+  getSalesRange,
+  getThirdPartyReport,
+  getTopProducts,
+} from '@/api/reports'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
@@ -10,7 +18,8 @@ import { Table } from '@/components/ui/Table'
 import { Button } from '@/components/ui/Button'
 import { DailyClosingModal } from '@/components/DailyClosingModal'
 import { downloadCsv } from '@/lib/csv'
-import { formatCurrencyCOP, formatNumber, toISODate } from '@/lib/format'
+import { CUSTOMER_TYPE_LABELS, formatDocument } from '@/lib/customers'
+import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
 
 const today = new Date()
 
@@ -33,6 +42,14 @@ export const ReportsPage = () => {
     queryKey: ['report', 'daily-closing', dateFrom, dateTo],
     queryFn: () => getDailyClosing(dateFrom, dateTo),
   })
+  const thirdPartiesQuery = useQuery({
+    queryKey: ['report', 'third-parties', dateFrom, dateTo],
+    queryFn: () => getThirdPartyReport(dateFrom, dateTo),
+  })
+  const invoiceRequestsQuery = useQuery({
+    queryKey: ['report', 'invoice-requests', dateFrom, dateTo],
+    queryFn: () => getInvoiceRequests(dateFrom, dateTo),
+  })
 
   const exportLowStock = () => {
     if (!lowStockQuery.data || lowStockQuery.data.length === 0) return
@@ -44,8 +61,8 @@ export const ReportsPage = () => {
         row.product_name,
         row.sku,
         row.warehouse_name,
-        row.current_stock,
-        row.min_stock,
+        Math.round(Number(row.current_stock)),
+        Math.round(Number(row.min_stock)),
       ]),
     )
   }
@@ -59,9 +76,44 @@ export const ReportsPage = () => {
       topProductsQuery.data.map((row) => [
         row.product_name,
         row.sku,
-        row.units_sold,
+        Math.round(Number(row.units_sold)),
         row.subtotal,
         row.tax_total,
+        row.total,
+      ]),
+    )
+  }
+
+  const exportThirdParties = () => {
+    if (!thirdPartiesQuery.data || thirdPartiesQuery.data.length === 0) return
+    downloadCsv(
+      'ccp_pereira_terceros.csv',
+      ['Tercero', 'Tipo', 'Documento', 'Correo', 'Teléfono', 'Ventas', 'Facturas', 'Total facturado'],
+      thirdPartiesQuery.data.map((row) => [
+        row.name,
+        CUSTOMER_TYPE_LABELS[row.customer_type] ?? row.customer_type,
+        formatDocument(row.document_type, row.document_number),
+        row.email ?? '',
+        row.phone ?? '',
+        row.total_sales,
+        row.invoice_count,
+        row.total_invoiced,
+      ]),
+    )
+  }
+
+  const exportInvoiceRequests = () => {
+    if (!invoiceRequestsQuery.data || invoiceRequestsQuery.data.length === 0) return
+    downloadCsv(
+      'ccp_pereira_facturas_solicitadas.csv',
+      ['Fecha', 'Factura', 'Cliente', 'Documento', 'Correo', 'Teléfono', 'Total'],
+      invoiceRequestsQuery.data.map((row) => [
+        row.sold_at,
+        row.sale_number,
+        row.customer_name ?? '',
+        formatDocument(row.document_type, row.document_number),
+        row.email ?? '',
+        row.phone ?? '',
         row.total,
       ]),
     )
@@ -125,7 +177,12 @@ export const ReportsPage = () => {
         onClose={(): void => setClosingOpen(false)}
       />
 
-      {inventoryValueQuery.isLoading || lowStockQuery.isLoading || topProductsQuery.isLoading || salesRangeQuery.isLoading ? (
+      {inventoryValueQuery.isLoading ||
+      lowStockQuery.isLoading ||
+      topProductsQuery.isLoading ||
+      salesRangeQuery.isLoading ||
+      thirdPartiesQuery.isLoading ||
+      invoiceRequestsQuery.isLoading ? (
         <Loading message="Cargando reportes..." />
       ) : null}
 
@@ -169,8 +226,8 @@ export const ReportsPage = () => {
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
                   <td className="px-3 py-2.5">{row.warehouse_name}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 3)}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 3)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 0)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 0)}</td>
                 </tr>
               ))}
             </Table>
@@ -195,9 +252,78 @@ export const ReportsPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 2)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 0)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.subtotal)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.tax_total)}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card
+          title="Terceros registrados"
+          subtitle="Reporte genérico de clientes y facturación electrónica"
+          actions={
+            <Button type="button" variant="secondary" onClick={exportThirdParties}>
+              Exportar CSV
+            </Button>
+          }
+        >
+          {!thirdPartiesQuery.data || thirdPartiesQuery.data.length === 0 ? (
+            <EmptyState title="Sin terceros" description="Crea un cliente desde el POS para facturación electrónica." />
+          ) : (
+            <Table columns={['Tercero', 'Documento', 'Contacto', 'Facturas', 'Total facturado']}>
+              {thirdPartiesQuery.data.map((row) => (
+                <tr key={row.customer_id}>
+                  <td className="px-3 py-2.5">
+                    <p className="font-medium text-slate-800">{row.name}</p>
+                    <p className="text-xs text-slate-500">{CUSTOMER_TYPE_LABELS[row.customer_type]}</p>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <p className="text-xs text-slate-700">
+                      {formatDocument(row.document_type, row.document_number) || '-'}
+                    </p>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <p className="text-xs text-slate-600">{row.email ?? '-'}</p>
+                    <p className="text-xs text-slate-500">{row.phone ?? '-'}</p>
+                  </td>
+                  <td className="px-3 py-2.5">{row.invoice_count}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total_invoiced)}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Card>
+
+        <Card
+          title="Facturas electrónicas solicitadas"
+          subtitle="Cada tercero que pidió factura en el rango de fechas"
+          actions={
+            <Button type="button" variant="secondary" onClick={exportInvoiceRequests}>
+              Exportar CSV
+            </Button>
+          }
+        >
+          {!invoiceRequestsQuery.data || invoiceRequestsQuery.data.length === 0 ? (
+            <EmptyState title="Sin solicitudes" description="No hay facturas electrónicas solicitadas en este rango." />
+          ) : (
+            <Table columns={['Fecha', 'Factura', 'Cliente', 'Documento', 'Total']}>
+              {invoiceRequestsQuery.data.map((row) => (
+                <tr key={row.sale_id}>
+                  <td className="px-3 py-2.5 text-xs text-slate-500">{formatDateTime(row.sold_at)}</td>
+                  <td className="px-3 py-2.5">{row.sale_number}</td>
+                  <td className="px-3 py-2.5">
+                    <p className="font-medium text-slate-800">{row.customer_name ?? '-'}</p>
+                    <p className="text-xs text-slate-500">{row.email ?? '-'}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs">
+                    {formatDocument(row.document_type, row.document_number) || '-'}
+                  </td>
                   <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
                 </tr>
               ))}

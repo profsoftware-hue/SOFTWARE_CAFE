@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_permissions
 from app.db.session import get_db
-from app.models.catalogs import Warehouse
+from app.models.catalogs import Customer, Warehouse
 from app.models.company import CompanyProfile
 from app.models.enums import DocStatus, PaymentMethod
 from app.models.inventory import InventoryBalance
@@ -23,7 +23,9 @@ from app.schemas.reports import (
     DailyClosingOut,
     DailyClosingPaymentOut,
     InventoryValueOut,
+    InvoiceRequestOut,
     SalesRangeOut,
+    ThirdPartyOut,
     TopProductOut,
 )
 
@@ -52,6 +54,17 @@ def _range_bounds(date_from: date, date_to: date) -> tuple[datetime, datetime]:
     )
 
 
+def _optional_range_bounds(
+    date_from: date | None,
+    date_to: date | None,
+) -> tuple[datetime | None, datetime | None]:
+    if date_from is not None and date_to is not None:
+        return _range_bounds(date_from, date_to)
+    start = datetime.combine(date_from, time.min, tzinfo=BOGOTA_TZ) if date_from else None
+    end = datetime.combine(date_to, time.max, tzinfo=BOGOTA_TZ) if date_to else None
+    return start, end
+
+
 @router.get("/inventory-value", response_model=InventoryValueOut)
 def inventory_value(
     db: Session = Depends(get_db),
@@ -75,12 +88,13 @@ def low_stock(
     sold = (
         select(
             SaleItem.product_id.label("product_id"),
+            Sale.warehouse_id.label("warehouse_id"),
             func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.status == DocStatus.CONFIRMED)
-        .group_by(SaleItem.product_id)
+        .group_by(SaleItem.product_id, Sale.warehouse_id)
     ).subquery()
 
     stmt = (
@@ -112,7 +126,10 @@ def low_stock(
                 InventoryBalance.warehouse_id == Warehouse.id,
             ),
         )
-        .outerjoin(sold, sold.c.product_id == Product.id)
+        .outerjoin(
+            sold,
+            and_(sold.c.product_id == Product.id, sold.c.warehouse_id == Warehouse.id),
+        )
         .where(
             Product.is_active.is_(True),
             Warehouse.is_active.is_(True),
@@ -193,6 +210,99 @@ def sales_range(
         tax_total=row["tax_total"],
         total=row["total"],
     )
+
+
+@router.get("/third-parties", response_model=list[ThirdPartyOut])
+def third_parties(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permissions("reports.view")),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> list[ThirdPartyOut]:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor a la final")
+
+    start, end = _optional_range_bounds(date_from, date_to)
+
+    sales_stmt = select(
+        Sale.customer_id.label("customer_id"),
+        func.coalesce(func.sum(Sale.total), 0).label("total_sales"),
+    ).where(Sale.status == DocStatus.CONFIRMED, Sale.customer_id.is_not(None))
+    invoice_stmt = select(
+        Sale.customer_id.label("customer_id"),
+        func.count(Sale.id).label("invoice_count"),
+        func.coalesce(func.sum(Sale.total), 0).label("total_invoiced"),
+        func.max(Sale.sold_at).label("last_invoice_at"),
+    ).where(
+        Sale.status == DocStatus.CONFIRMED,
+        Sale.invoice_requested.is_(True),
+        Sale.customer_id.is_not(None),
+    )
+    if start is not None:
+        sales_stmt = sales_stmt.where(Sale.sold_at >= start)
+        invoice_stmt = invoice_stmt.where(Sale.sold_at >= start)
+    if end is not None:
+        sales_stmt = sales_stmt.where(Sale.sold_at <= end)
+        invoice_stmt = invoice_stmt.where(Sale.sold_at <= end)
+
+    sales_subq = sales_stmt.group_by(Sale.customer_id).subquery()
+    invoice_subq = invoice_stmt.group_by(Sale.customer_id).subquery()
+
+    stmt = (
+        select(
+            Customer.id.label("customer_id"),
+            Customer.name,
+            Customer.customer_type,
+            Customer.document_type,
+            Customer.document_number,
+            Customer.email,
+            Customer.phone,
+            Customer.address,
+            func.coalesce(sales_subq.c.total_sales, 0).label("total_sales"),
+            func.coalesce(invoice_subq.c.invoice_count, 0).label("invoice_count"),
+            func.coalesce(invoice_subq.c.total_invoiced, 0).label("total_invoiced"),
+            invoice_subq.c.last_invoice_at,
+        )
+        .select_from(Customer)
+        .outerjoin(sales_subq, sales_subq.c.customer_id == Customer.id)
+        .outerjoin(invoice_subq, invoice_subq.c.customer_id == Customer.id)
+        .where(Customer.is_active.is_(True))
+        .order_by(Customer.name.asc())
+    )
+    rows = db.execute(stmt).mappings().all()
+    return [ThirdPartyOut(**row) for row in rows]
+
+
+@router.get("/invoice-requests", response_model=list[InvoiceRequestOut])
+def invoice_requests(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_permissions("reports.view")),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+) -> list[InvoiceRequestOut]:
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=400, detail="La fecha inicial no puede ser mayor a la final")
+
+    start, end = _optional_range_bounds(date_from, date_to)
+    stmt = select(
+        Sale.id.label("sale_id"),
+        Sale.sale_number,
+        Sale.sold_at,
+        Sale.invoice_customer_name.label("customer_name"),
+        Sale.invoice_customer_document_type.label("document_type"),
+        Sale.invoice_customer_document_number.label("document_number"),
+        Sale.invoice_customer_email.label("email"),
+        Sale.invoice_customer_phone.label("phone"),
+        Sale.payment_method,
+        Sale.total,
+    ).where(Sale.status == DocStatus.CONFIRMED, Sale.invoice_requested.is_(True))
+    if start is not None:
+        stmt = stmt.where(Sale.sold_at >= start)
+    if end is not None:
+        stmt = stmt.where(Sale.sold_at <= end)
+    stmt = stmt.order_by(Sale.sold_at.desc(), Sale.id.desc())
+    rows = db.execute(stmt).mappings().all()
+    return [InvoiceRequestOut(**row) for row in rows]
 
 
 @router.get("/daily-closing", response_model=DailyClosingOut)

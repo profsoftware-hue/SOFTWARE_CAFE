@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import PaymentMethod
+from app.models.enums import CustomerType, DocumentType, PaymentMethod
 
 
 class InventoryValueOut(BaseModel):
@@ -37,6 +37,34 @@ class DailyClosingItemOut(BaseModel):
     quantity: Decimal
     subtotal: Decimal
     tax_total: Decimal
+    total: Decimal
+
+
+class ThirdPartyOut(BaseModel):
+    customer_id: int
+    name: str
+    customer_type: CustomerType
+    document_type: DocumentType
+    document_number: str | None
+    email: str | None
+    phone: str | None
+    address: str | None
+    total_sales: Decimal
+    invoice_count: int
+    total_invoiced: Decimal
+    last_invoice_at: datetime | None
+
+
+class InvoiceRequestOut(BaseModel):
+    sale_id: int
+    sale_number: str
+    sold_at: datetime
+    customer_name: str | None
+    document_type: DocumentType | None
+    document_number: str | None
+    email: str | None
+    phone: str | None
+    payment_method: PaymentMethod
     total: Decimal
 
 
