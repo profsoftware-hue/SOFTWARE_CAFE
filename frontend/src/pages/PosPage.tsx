@@ -23,7 +23,13 @@ import { Table } from '@/components/ui/Table'
 import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { ReceiptModal } from '@/components/ReceiptModal'
 import { CUSTOMER_TYPE_OPTIONS, DOCUMENT_TYPE_OPTIONS, formatDocument } from '@/lib/customers'
-import { formatCurrencyCOP, formatDateTime, formatNumber } from '@/lib/format'
+import {
+  formatCurrencyCOP,
+  formatDateTime,
+  formatNumber,
+  formatThousands,
+  parseThousands,
+} from '@/lib/format'
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments'
 import type { Customer, CustomerType, DocumentType, PaymentMethod, Product } from '@/types/api'
 
@@ -106,8 +112,8 @@ export const PosPage = () => {
     }
     return { subtotal, tax, total: subtotal + tax }
   }, [cartItems])
-  const cashReceivedNumber = Number(cashReceived)
-  const changeDue = Number.isFinite(cashReceivedNumber) ? cashReceivedNumber - cartTotals.total : -cartTotals.total
+  const cashReceivedNumber = parseThousands(cashReceived)
+  const changeDue = cashReceivedNumber - cartTotals.total
 
   const filteredProducts = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -520,12 +526,11 @@ export const PosPage = () => {
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
                 <Input
                   label="Efectivo recibido"
-                  type="number"
-                  min="0"
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
                   value={cashReceived}
-                  onChange={(event): void => setCashReceived(event.target.value)}
-                  placeholder="Ej. 50000"
+                  onChange={(event): void => setCashReceived(formatThousands(event.target.value))}
+                  placeholder="Ej. 50.000"
                 />
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                   <p className="text-xs text-slate-500">Total a cobrar</p>
@@ -556,7 +561,7 @@ export const PosPage = () => {
                     key={value}
                     type="button"
                     variant="ghost"
-                    onClick={(): void => setCashReceived(String(value))}
+                    onClick={(): void => setCashReceived(formatThousands(value))}
                   >
                     {formatCurrencyCOP(value)}
                   </Button>

@@ -17,7 +17,14 @@ import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
 import { downloadCsv } from '@/lib/csv'
-import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
+import {
+  formatCurrencyCOP,
+  formatDateTime,
+  formatNumber,
+  formatThousands,
+  parseThousands,
+  toISODate,
+} from '@/lib/format'
 import type { CurrentStockRow } from '@/types/api'
 
 type InventoryTab = 'products' | 'kardex'
@@ -168,8 +175,8 @@ export const InventoryPage = () => {
     setEditRow(row)
     setEditForm({
       name: row.product_name,
-      sale_price_excl_tax: row.sale_price_excl_tax,
-      cost_price: row.cost_price,
+      sale_price_excl_tax: formatThousands(row.sale_price_excl_tax),
+      cost_price: formatThousands(row.cost_price),
       vat_rate: row.vat_rate,
       sku: row.sku,
     })
@@ -184,8 +191,8 @@ export const InventoryPage = () => {
     setEditError(null)
 
     const name = editForm.name.trim()
-    const price = Math.round(Number(editForm.sale_price_excl_tax))
-    const cost = Math.round(Number(editForm.cost_price))
+    const price = parseThousands(editForm.sale_price_excl_tax)
+    const cost = parseThousands(editForm.cost_price)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(cost) || cost < 0) {
       setEditError('Completa nombre, precio y costo con valores válidos.')
@@ -209,8 +216,8 @@ export const InventoryPage = () => {
     setNewError(null)
 
     const name = newForm.name.trim()
-    const price = Math.round(Number(newForm.sale_price_excl_tax))
-    const quantity = Math.round(Number(newForm.quantity))
+    const price = parseThousands(newForm.sale_price_excl_tax)
+    const quantity = parseThousands(newForm.quantity)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(quantity) || quantity <= 0) {
       setNewError('Completa nombre, precio y una cantidad mayor a cero.')
@@ -221,7 +228,7 @@ export const InventoryPage = () => {
       name,
       quantity,
       sale_price_excl_tax: price,
-      cost_price: Math.round(Number(newForm.cost_price)) || 0,
+      cost_price: parseThousands(newForm.cost_price),
       vat_rate: Number(newForm.vat_rate),
       sku: newForm.sku.trim() || undefined,
     })
@@ -232,8 +239,8 @@ export const InventoryPage = () => {
     if (!addRow) return
     setAddError(null)
 
-    const quantity = Math.round(Number(addQuantity))
-    if (Number.isNaN(quantity) || quantity <= 0) {
+    const quantity = parseThousands(addQuantity)
+    if (quantity <= 0) {
       setAddError('Ingresa una cantidad mayor a cero.')
       return
     }
@@ -578,31 +585,35 @@ export const InventoryPage = () => {
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Precio de venta *"
-              type="number"
-              min="0"
-              step="1"
+              type="text"
+              inputMode="numeric"
               value={newForm.sale_price_excl_tax}
               onChange={(event): void =>
-                setNewForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
+                setNewForm((prev) => ({
+                  ...prev,
+                  sale_price_excl_tax: formatThousands(event.target.value),
+                }))
               }
               required
             />
             <Input
               label="Cantidad inicial *"
-              type="number"
-              min="1"
-              step="1"
+              type="text"
+              inputMode="numeric"
               value={newForm.quantity}
-              onChange={(event): void => setNewForm((prev) => ({ ...prev, quantity: event.target.value }))}
+              onChange={(event): void =>
+                setNewForm((prev) => ({ ...prev, quantity: formatThousands(event.target.value) }))
+              }
               required
             />
             <Input
               label="Costo unitario (solo una vez)"
-              type="number"
-              min="0"
-              step="1"
+              type="text"
+              inputMode="numeric"
               value={newForm.cost_price}
-              onChange={(event): void => setNewForm((prev) => ({ ...prev, cost_price: event.target.value }))}
+              onChange={(event): void =>
+                setNewForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
+              }
               placeholder="0"
               helperText="Se guarda y ya no se vuelve a pedir."
             />
@@ -665,11 +676,10 @@ export const InventoryPage = () => {
 
             <Input
               label="Unidades que llegaron *"
-              type="number"
-              min="1"
-              step="1"
+              type="text"
+              inputMode="numeric"
               value={addQuantity}
-              onChange={(event): void => setAddQuantity(event.target.value)}
+              onChange={(event): void => setAddQuantity(formatThousands(event.target.value))}
               required
             />
 
@@ -718,23 +728,24 @@ export const InventoryPage = () => {
             <div className="grid gap-3 md:grid-cols-2">
               <Input
                 label="Precio de venta *"
-                type="number"
-                min="0"
-                step="1"
+                type="text"
+                inputMode="numeric"
                 value={editForm.sale_price_excl_tax}
                 onChange={(event): void =>
-                  setEditForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
+                  setEditForm((prev) => ({
+                    ...prev,
+                    sale_price_excl_tax: formatThousands(event.target.value),
+                  }))
                 }
                 required
               />
               <Input
                 label="Costo unitario *"
-                type="number"
-                min="0"
-                step="1"
+                type="text"
+                inputMode="numeric"
                 value={editForm.cost_price}
                 onChange={(event): void =>
-                  setEditForm((prev) => ({ ...prev, cost_price: event.target.value }))
+                  setEditForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
                 }
                 required
               />

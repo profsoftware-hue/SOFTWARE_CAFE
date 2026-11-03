@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatCurrencyCOP, formatNumber, toISODate } from '@/lib/format'
+import {
+  formatCurrencyCOP,
+  formatNumber,
+  formatThousands,
+  parseThousands,
+  toISODate,
+} from '@/lib/format'
 
 describe('format helpers', () => {
   it('convierte una fecha local al formato ISO de input date', () => {
@@ -16,5 +22,12 @@ describe('format helpers', () => {
   it('formatea números y moneda', () => {
     expect(formatNumber(1234.5, 1)).toBe('1.234,5')
     expect(formatCurrencyCOP(43197)).toContain('43.197')
+  })
+
+  it('formatea y lee separadores de miles', () => {
+    expect(formatThousands(10000)).toBe('10.000')
+    expect(formatThousands('1234567')).toBe('1.234.567')
+    expect(parseThousands('10.000')).toBe(10000)
+    expect(parseThousands('')).toBe(0)
   })
 })

@@ -9,6 +9,17 @@ export const formatCurrencyCOP = (value: number | string): string => {
   }).format(numeric)
 }
 
+export const formatThousands = (value: number | string): string => {
+  const digits = String(value).replace(/\D/g, '')
+  if (!digits) return ''
+  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(digits))
+}
+
+export const parseThousands = (value: string): number => {
+  const digits = value.replace(/\D/g, '')
+  return digits ? Number(digits) : 0
+}
+
 export const formatNumber = (value: number | string, decimals = 2): string => {
   const numeric = Number(value)
   if (Number.isNaN(numeric)) return '0'
