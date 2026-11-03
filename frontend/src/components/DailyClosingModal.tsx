@@ -41,7 +41,7 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
       .map(
         (item) => `
           <tr>
-            <td class="qty">${formatNumber(item.quantity, 0)}</td>
+            <td class="qty">${formatNumber(item.quantity, 3)}</td>
             <td class="desc">${escapeHtml(item.product_name)}${item.sku ? `<div class="small">${escapeHtml(item.sku)}</div>` : ''}</td>
             <td class="money">${formatCurrencyCOP(item.total)}</td>
           </tr>
@@ -196,7 +196,7 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
                 <tbody>
                   {data.items.map((item, index) => (
                     <tr key={`${item.sku ?? item.product_name}-${index}`} className="border-b border-dotted border-slate-200">
-                      <td className="py-1 text-center">{formatNumber(item.quantity, 0)}</td>
+                      <td className="py-1 text-center">{formatNumber(item.quantity, 3)}</td>
                       <td className="py-1">
                         <p className="text-slate-800">{item.product_name}</p>
                         {item.sku ? <p className="text-[9px] text-slate-400">{item.sku}</p> : null}

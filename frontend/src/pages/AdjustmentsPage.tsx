@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { formatDecimalInput, parseDecimal } from '@/lib/format'
 
 interface AdjustmentLine {
   product_id: string
@@ -85,8 +86,8 @@ export const AdjustmentsPage = () => {
       .filter((line) => line.product_id)
       .map((line) => ({
         product_id: Number(line.product_id),
-        quantity: Number(line.quantity),
-        unit_cost: Number(line.unit_cost),
+        quantity: parseDecimal(line.quantity),
+        unit_cost: parseDecimal(line.unit_cost),
         note: line.note || null,
       }))
 
@@ -188,22 +189,26 @@ export const AdjustmentsPage = () => {
               <div className="md:col-span-2">
                 <Input
                   label="Cantidad"
-                  type="number"
-                  min="1"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={line.quantity}
-                  onChange={(event): void => updateLine(index, { quantity: event.target.value })}
+                  onChange={(event): void =>
+                    updateLine(index, { quantity: formatDecimalInput(event.target.value, 3) })
+                  }
+                  helperText="Hasta 3 decimales."
                   required
                 />
               </div>
               <div className="md:col-span-2">
                 <Input
                   label="Costo"
-                  type="number"
-                  min="0"
-                  step="1"
+                  type="text"
+                  inputMode="decimal"
                   value={line.unit_cost}
-                  onChange={(event): void => updateLine(index, { unit_cost: event.target.value })}
+                  onChange={(event): void =>
+                    updateLine(index, { unit_cost: formatDecimalInput(event.target.value, 2) })
+                  }
+                  helperText="Usa coma para decimales."
                 />
               </div>
               <div className="md:col-span-3">

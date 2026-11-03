@@ -135,7 +135,7 @@ export const DashboardPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 0)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 3)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.subtotal)}</td>
                   <td className="px-3 py-2.5">{formatCurrencyCOP(row.tax_total)}</td>
                   <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
@@ -167,8 +167,8 @@ export const DashboardPage = () => {
                     <p className="text-xs text-amber-700">{row.warehouse_name}</p>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">
-                    Disponible: <strong>{formatNumber(row.current_stock, 0)}</strong> | Mínimo:{' '}
-                    <strong>{formatNumber(row.min_stock, 0)}</strong>
+                    Disponible: <strong>{formatNumber(row.current_stock, 3)}</strong> | Mínimo:{' '}
+                    <strong>{formatNumber(row.min_stock, 3)}</strong>
                   </p>
                 </article>
               ))}

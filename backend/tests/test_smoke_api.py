@@ -288,6 +288,23 @@ def test_product_sale_and_closing() -> None:
     assert recent_sale["invoice_requested"] is True
     assert recent_sale["sale_number"] == invoice_sale.json()["number"]
 
+    # El administrador puede editar un producto existente y conservar decimales.
+    updated = client.patch(
+        f"/api/v1/products/{product_id}",
+        json={
+            "sale_price_excl_tax": "1000.75",
+            "cost_price": "500.25",
+            "min_stock": "2.5",
+        },
+        headers=headers,
+    )
+    assert updated.status_code == 200, updated.text
+    updated_product = updated.json()
+    assert float(updated_product["sale_price_excl_tax"]) == 1000.75
+    assert float(updated_product["cost_price"]) == 500.25
+    assert float(updated_product["min_stock"]) == 2.5
+    assert float(updated_product["final_price_incl_tax"]) == 1190.89
+
 
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()

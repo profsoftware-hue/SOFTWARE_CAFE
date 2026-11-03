@@ -16,15 +16,17 @@ import { Loading } from '@/components/ui/Loading'
 import { Modal } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
 import { Table } from '@/components/ui/Table'
+import { PriceBreakdown } from '@/components/PriceBreakdown'
 import { downloadCsv } from '@/lib/csv'
 import {
   formatCurrencyCOP,
   formatDateTime,
+  formatDecimalInput,
   formatNumber,
-  formatThousands,
-  parseThousands,
+  parseDecimal,
   toISODate,
 } from '@/lib/format'
+import { calculatePriceBreakdown } from '@/lib/pricing'
 import type { CurrentStockRow } from '@/types/api'
 
 type InventoryTab = 'products' | 'kardex'
@@ -50,8 +52,9 @@ const emptyNewProduct = (): NewProductForm => ({
 export const InventoryPage = () => {
   const queryClient = useQueryClient()
   const { session, hasPermission } = useAuth()
-  const canManage = hasPermission('inventory.manage')
   const isAdmin = session?.roles.includes('ADMIN') ?? false
+  // El administrador siempre puede crear, editar y ajustar productos.
+  const canManage = isAdmin || hasPermission('inventory.manage')
   const [activeTab, setActiveTab] = useState<InventoryTab>('products')
 
   const [search, setSearch] = useState('')
@@ -176,8 +179,8 @@ export const InventoryPage = () => {
     setEditRow(row)
     setEditForm({
       name: row.product_name,
-      sale_price_excl_tax: formatThousands(row.sale_price_excl_tax),
-      cost_price: formatThousands(row.cost_price),
+      sale_price_excl_tax: formatNumber(row.sale_price_excl_tax, 2),
+      cost_price: formatNumber(row.cost_price, 2),
       vat_rate: row.vat_rate,
       sku: row.sku,
     })
@@ -192,8 +195,8 @@ export const InventoryPage = () => {
     setEditError(null)
 
     const name = editForm.name.trim()
-    const price = parseThousands(editForm.sale_price_excl_tax)
-    const cost = parseThousands(editForm.cost_price)
+    const price = parseDecimal(editForm.sale_price_excl_tax)
+    const cost = parseDecimal(editForm.cost_price)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(cost) || cost < 0) {
       setEditError('Completa nombre, precio y costo con valores válidos.')
@@ -217,8 +220,8 @@ export const InventoryPage = () => {
     setNewError(null)
 
     const name = newForm.name.trim()
-    const price = parseThousands(newForm.sale_price_excl_tax)
-    const quantity = parseThousands(newForm.quantity)
+    const price = parseDecimal(newForm.sale_price_excl_tax)
+    const quantity = parseDecimal(newForm.quantity)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(quantity) || quantity <= 0) {
       setNewError('Completa nombre, precio y una cantidad mayor a cero.')
@@ -229,7 +232,7 @@ export const InventoryPage = () => {
       name,
       quantity,
       sale_price_excl_tax: price,
-      cost_price: parseThousands(newForm.cost_price),
+      cost_price: parseDecimal(newForm.cost_price),
       vat_rate: Number(newForm.vat_rate),
       sku: newForm.sku.trim() || undefined,
     })
@@ -240,7 +243,7 @@ export const InventoryPage = () => {
     if (!addRow) return
     setAddError(null)
 
-    const quantity = parseThousands(addQuantity)
+    const quantity = parseDecimal(addQuantity)
     if (quantity <= 0) {
       setAddError('Ingresa una cantidad mayor a cero.')
       return
@@ -288,13 +291,17 @@ export const InventoryPage = () => {
         row.warehouse_name,
         row.sale_price_excl_tax,
         row.cost_price,
-        Math.round(Number(row.current_stock)),
-        Math.round(Number(row.sold_quantity)),
+        Number(row.current_stock),
+        Number(row.sold_quantity),
         row.sold_total,
-        Math.round(Number(row.min_stock)),
+        Number(row.min_stock),
       ]),
     )
   }
+
+  const detailPrice = detailRow
+    ? calculatePriceBreakdown(Number(detailRow.sale_price_excl_tax), detailRow.vat_rate)
+    : null
 
   return (
     <div className="space-y-4">
@@ -413,22 +420,26 @@ export const InventoryPage = () => {
                 'Stock',
                 'Vendidos',
                 'Total vendido',
-                'Precio',
+                'Precio final',
                 'Estado',
                 'Acciones',
               ]}
             >
-              {stockQuery.data.map((row) => (
+              {stockQuery.data.map((row) => {
+                const price = calculatePriceBreakdown(Number(row.sale_price_excl_tax), row.vat_rate)
+
+                return (
                 <tr key={`${row.product_id}-${row.warehouse_id}`}>
                   <td className="px-2.5 py-2 sm:px-3">
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 0)}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 0)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
                   <td className="px-2.5 py-2 font-semibold sm:px-3">{formatCurrencyCOP(row.sold_total)}</td>
-                  <td className="px-2.5 py-2 font-semibold sm:px-3">
-                    {formatCurrencyCOP(row.sale_price_excl_tax)}
+                  <td className="px-2.5 py-2 sm:px-3">
+                    <p className="font-semibold text-slate-800">{formatCurrencyCOP(price.total)}</p>
+                    <p className="text-[11px] text-slate-500">Base {formatCurrencyCOP(price.base)}</p>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
                     <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
@@ -493,7 +504,8 @@ export const InventoryPage = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </Table>
           ) : null}
         </Card>
@@ -562,7 +574,7 @@ export const InventoryPage = () => {
                   <td className="px-2.5 py-2 sm:px-3">#{movement.warehouse_id}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.movement_type}</td>
                   <td className="px-2.5 py-2 sm:px-3">{movement.direction}</td>
-                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 0)}</td>
+                  <td className="px-2.5 py-2 sm:px-3">{formatNumber(movement.quantity, 3)}</td>
                   <td className="hidden px-3 py-2 2xl:table-cell">
                     {movement.unit_cost ? formatCurrencyCOP(movement.unit_cost) : '-'}
                   </td>
@@ -591,35 +603,39 @@ export const InventoryPage = () => {
 
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              label="Precio de venta *"
+              label="Precio antes de IVA *"
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={newForm.sale_price_excl_tax}
               onChange={(event): void =>
                 setNewForm((prev) => ({
                   ...prev,
-                  sale_price_excl_tax: formatThousands(event.target.value),
+                  sale_price_excl_tax: formatDecimalInput(event.target.value, 2),
                 }))
               }
+              placeholder="Ej. 12.500,50"
+              helperText="Usa coma para decimales."
               required
             />
             <Input
               label="Cantidad inicial *"
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={newForm.quantity}
               onChange={(event): void =>
-                setNewForm((prev) => ({ ...prev, quantity: formatThousands(event.target.value) }))
+                setNewForm((prev) => ({ ...prev, quantity: formatDecimalInput(event.target.value, 3) }))
               }
+              placeholder="Ej. 1,5"
+              helperText="Hasta 3 decimales."
               required
             />
             <Input
               label="Costo unitario (solo una vez)"
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={newForm.cost_price}
               onChange={(event): void =>
-                setNewForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
+                setNewForm((prev) => ({ ...prev, cost_price: formatDecimalInput(event.target.value, 2) }))
               }
               placeholder="0"
               helperText="Se guarda y ya no se vuelve a pedir."
@@ -638,6 +654,11 @@ export const InventoryPage = () => {
               value={newForm.sku}
               onChange={(event): void => setNewForm((prev) => ({ ...prev, sku: event.target.value }))}
               placeholder="Se genera automático"
+            />
+            <PriceBreakdown
+              basePrice={parseDecimal(newForm.sale_price_excl_tax)}
+              vatRate={newForm.vat_rate}
+              className="md:col-span-2"
             />
           </div>
 
@@ -676,7 +697,7 @@ export const InventoryPage = () => {
                   Costo registrado: <strong>{formatCurrencyCOP(addRow.cost_price)}</strong>
                 </p>
                 <p>
-                  Stock actual: <strong>{formatNumber(addRow.current_stock, 0)}</strong>
+                  Stock actual: <strong>{formatNumber(addRow.current_stock, 3)}</strong>
                 </p>
               </div>
             </div>
@@ -684,9 +705,11 @@ export const InventoryPage = () => {
             <Input
               label="Unidades que llegaron *"
               type="text"
-              inputMode="numeric"
+              inputMode="decimal"
               value={addQuantity}
-              onChange={(event): void => setAddQuantity(formatThousands(event.target.value))}
+              onChange={(event): void => setAddQuantity(formatDecimalInput(event.target.value, 3))}
+              placeholder="Ej. 1,5"
+              helperText="Hasta 3 decimales."
               required
             />
 
@@ -721,7 +744,7 @@ export const InventoryPage = () => {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
               <p className="font-semibold text-slate-800">{editRow.product_name}</p>
               <p className="text-xs text-slate-500">
-                Stock actual: {formatNumber(editRow.current_stock, 0)} · SKU: {editRow.sku}
+                Stock actual: {formatNumber(editRow.current_stock, 3)} · SKU: {editRow.sku}
               </p>
             </div>
 
@@ -734,26 +757,32 @@ export const InventoryPage = () => {
 
             <div className="grid gap-3 md:grid-cols-2">
               <Input
-                label="Precio de venta *"
+                label="Precio antes de IVA *"
                 type="text"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={editForm.sale_price_excl_tax}
                 onChange={(event): void =>
                   setEditForm((prev) => ({
                     ...prev,
-                    sale_price_excl_tax: formatThousands(event.target.value),
+                    sale_price_excl_tax: formatDecimalInput(event.target.value, 2),
                   }))
                 }
+                placeholder="Ej. 12.500,50"
+                helperText="Usa coma para decimales."
                 required
               />
               <Input
                 label="Costo unitario *"
                 type="text"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={editForm.cost_price}
                 onChange={(event): void =>
-                  setEditForm((prev) => ({ ...prev, cost_price: formatThousands(event.target.value) }))
+                  setEditForm((prev) => ({
+                    ...prev,
+                    cost_price: formatDecimalInput(event.target.value, 2),
+                  }))
                 }
+                placeholder="0"
                 required
               />
               <Select
@@ -769,6 +798,11 @@ export const InventoryPage = () => {
                 label="SKU / código"
                 value={editForm.sku}
                 onChange={(event): void => setEditForm((prev) => ({ ...prev, sku: event.target.value }))}
+              />
+              <PriceBreakdown
+                basePrice={parseDecimal(editForm.sale_price_excl_tax)}
+                vatRate={editForm.vat_rate}
+                className="md:col-span-2"
               />
             </div>
 
@@ -819,8 +853,22 @@ export const InventoryPage = () => {
                 </Badge>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Precio venta</p>
-                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.sale_price_excl_tax)}</p>
+                <p className="text-xs text-slate-500">Precio antes de IVA</p>
+                <p className="font-semibold text-slate-800">
+                  {formatCurrencyCOP(detailRow.sale_price_excl_tax)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">
+                  IVA ({formatNumber(Number(detailRow.vat_rate) * 100, 0)}%)
+                </p>
+                <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailPrice?.vat ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Precio total de venta</p>
+                <p className="font-semibold text-slate-800">
+                  {formatCurrencyCOP(detailPrice?.total ?? 0)}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Costo</p>
@@ -828,15 +876,15 @@ export const InventoryPage = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-500">Stock actual</p>
-                <p className="text-lg font-bold text-slate-800">{formatNumber(detailRow.current_stock, 0)}</p>
+                <p className="text-lg font-bold text-slate-800">{formatNumber(detailRow.current_stock, 3)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Stock mínimo</p>
-                <p className="font-semibold text-slate-800">{formatNumber(detailRow.min_stock, 0)}</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.min_stock, 3)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Vendidos</p>
-                <p className="font-semibold text-slate-800">{formatNumber(detailRow.sold_quantity, 0)}</p>
+                <p className="font-semibold text-slate-800">{formatNumber(detailRow.sold_quantity, 3)}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500">Total vendido</p>
