@@ -667,7 +667,7 @@ export const PosPage = () => {
                     >
                       <Minus size={14} />
                     </button>
-                    <span className="min-w-8 text-center text-sm font-semibold">{formatNumber(item.quantity, 0)}</span>
+                    <span className="min-w-8 text-center text-sm font-semibold">{formatNumber(item.quantity, 3)}</span>
                     <button
                       type="button"
                       className="rounded p-1 text-slate-600 hover:bg-slate-100"

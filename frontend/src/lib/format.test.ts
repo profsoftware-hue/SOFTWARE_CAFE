@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatCurrencyCOP,
+  formatDecimalInput,
   formatNumber,
   formatThousands,
+  parseDecimal,
   parseThousands,
   toISODate,
 } from '@/lib/format'
@@ -19,9 +21,10 @@ describe('format helpers', () => {
     expect(formatCurrencyCOP('no-numero')).toBe('$ 0')
   })
 
-  it('formatea números y moneda', () => {
+  it('formatea números y moneda con decimales', () => {
     expect(formatNumber(1234.5, 1)).toBe('1.234,5')
     expect(formatCurrencyCOP(43197)).toContain('43.197')
+    expect(formatCurrencyCOP(1234.56)).toContain('1.234,56')
   })
 
   it('formatea y lee separadores de miles', () => {
@@ -29,5 +32,16 @@ describe('format helpers', () => {
     expect(formatThousands('1234567')).toBe('1.234.567')
     expect(parseThousands('10.000')).toBe(10000)
     expect(parseThousands('')).toBe(0)
+  })
+
+  it('formatea y lee valores decimales', () => {
+    expect(formatDecimalInput('1234,5', 2)).toBe('1.234,5')
+    expect(formatDecimalInput('1234,567', 2)).toBe('1.234,56')
+    expect(formatDecimalInput('10.000', 2)).toBe('10.000')
+    expect(formatDecimalInput('0,75', 3)).toBe('0,75')
+    expect(parseDecimal('1.234,56')).toBe(1234.56)
+    expect(parseDecimal('0,75')).toBe(0.75)
+    expect(parseDecimal('10.000')).toBe(10000)
+    expect(parseDecimal('')).toBe(0)
   })
 })

@@ -460,8 +460,8 @@ export const ProductsPage = () => {
             <Input
               label="Cantidad inicial *"
               type="number"
-              min="1"
-              step="1"
+              min="0.001"
+              step="0.001"
               value={quickForm.quantity}
               onChange={(event): void => setQuickForm((prev) => ({ ...prev, quantity: event.target.value }))}
               required
@@ -488,7 +488,7 @@ export const ProductsPage = () => {
               label="Precio de venta (opcional)"
               type="number"
               min="0"
-              step="1"
+              step="0.01"
               value={quickForm.sale_price_excl_tax}
               onChange={(event): void =>
                 setQuickForm((prev) => ({ ...prev, sale_price_excl_tax: event.target.value }))
@@ -580,7 +580,7 @@ export const ProductsPage = () => {
             <Input
               label="Costo"
               type="number"
-              step="1"
+              step="0.01"
               min="0"
               value={form.cost_price}
               onChange={(event): void => setForm((prev) => ({ ...prev, cost_price: event.target.value }))}
@@ -589,7 +589,7 @@ export const ProductsPage = () => {
             <Input
               label="Precio venta sin IVA"
               type="number"
-              step="1"
+              step="0.01"
               min="0"
               value={form.sale_price_excl_tax}
               onChange={(event): void =>
@@ -609,7 +609,7 @@ export const ProductsPage = () => {
             <Input
               label="Stock mínimo"
               type="number"
-              step="1"
+              step="0.001"
               min="0"
               value={form.min_stock}
               onChange={(event): void => setForm((prev) => ({ ...prev, min_stock: event.target.value }))}

@@ -36,7 +36,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
       .map(
         (item) => `
           <tr>
-            <td class="qty">${formatNumber(item.quantity, 0)}</td>
+            <td class="qty">${formatNumber(item.quantity, 3)}</td>
             <td class="desc">
               ${escapeHtml(item.product_name)}
               ${item.barcode ? `<div class="small">Cod: ${escapeHtml(item.barcode)}</div>` : ''}
@@ -234,7 +234,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
               <tbody>
                 {receipt.items.map((item, index) => (
                   <tr key={`${item.product_name}-${index}`} className="border-b border-dotted border-slate-200">
-                    <td className="py-1 text-center">{formatNumber(item.quantity, 0)}</td>
+                    <td className="py-1 text-center">{formatNumber(item.quantity, 3)}</td>
                     <td className="py-1">
                       <p className="text-slate-800">{item.product_name}</p>
                       {item.barcode ? <p className="text-[9px] text-slate-400">Cod: {item.barcode}</p> : null}
