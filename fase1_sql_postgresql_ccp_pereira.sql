@@ -40,7 +40,7 @@ CREATE TYPE ccp.adjustment_type AS ENUM (
 
 CREATE TABLE ccp.company_profile (
   id SMALLINT PRIMARY KEY DEFAULT 1,
-  name VARCHAR(120) NOT NULL DEFAULT 'FUNDACION NUESTRO FUTURO',
+  name VARCHAR(120) NOT NULL DEFAULT 'CAMARA DE COMERCIO DE PEREIRA',
   nit VARCHAR(30),
   address TEXT,
   phone VARCHAR(40),
@@ -868,7 +868,7 @@ VALUES
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO ccp.company_profile (id, name, nit)
-VALUES (1, 'FUNDACION NUESTRO FUTURO', '902103270-7')
+VALUES (1, 'CAMARA DE COMERCIO DE PEREIRA', '891400669-6')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO ccp.warehouses (code, name, description, is_default, is_active)

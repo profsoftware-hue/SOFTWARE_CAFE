@@ -13,7 +13,7 @@ class CompanyProfile(Base):
     __table_args__ = {"schema": "ccp"}
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, default="FUNDACION NUESTRO FUTURO")
+    name: Mapped[str] = mapped_column(String(120), nullable=False, default="CAMARA DE COMERCIO DE PEREIRA")
     nit: Mapped[str | None] = mapped_column(String(30))
     address: Mapped[str | None] = mapped_column(Text())
     phone: Mapped[str | None] = mapped_column(String(40))

@@ -366,7 +366,7 @@ def daily_closing(
         subtotal=totals["subtotal"],
         tax_total=totals["tax_total"],
         total=totals["total"],
-        company_name=company.name if company else "FUNDACION NUESTRO FUTURO",
+        company_name=company.name if company else "CAMARA DE COMERCIO DE PEREIRA",
         payment_methods=[
             DailyClosingPaymentOut(
                 payment_method=method,
