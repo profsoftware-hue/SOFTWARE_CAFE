@@ -19,8 +19,8 @@ from app.models.inventory import (
     InventoryMovement,
 )
 from app.models.product import Product
-from app.models.purchase import PurchaseItem
-from app.models.sale import SaleItem
+from app.models.purchase import Purchase, PurchaseItem
+from app.models.sale import Sale, SaleItem
 from app.models.user import User
 from app.schemas.product import ProductOut, ProductPatch, QuickProductCreate, StockEntryCreate
 from app.services.images import process_and_store_product_image, remove_stored_image
@@ -463,17 +463,31 @@ async def replace_product_image(
 @router.delete("/{product_id}", status_code=status.HTTP_200_OK)
 def delete_product(
     product_id: int,
+    force: bool = Query(default=False),
     db: Session = Depends(get_db),
-    _: User = Depends(require_permissions("inventory.manage")),
+    current_user: User = Depends(require_permissions("inventory.manage")),
 ) -> dict[str, str]:
-    """Elimina un producto solo si no tiene historial de inventario ni comercial.
+    """Elimina un producto.
 
-    Para conservar la trazabilidad, los productos con movimientos, ventas o compras
-    deben desactivarse en lugar de borrarse.
+    Sin ``force`` conserva la trazabilidad y bloquea el borrado cuando hay historial.
+    Con ``force=True`` un administrador puede eliminar también sus movimientos,
+    ajustes, ventas y compras, siempre que esos documentos no incluyan otros productos.
     """
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    sale_ids = list(db.scalars(select(SaleItem.sale_id).where(SaleItem.product_id == product_id).distinct()).all())
+    purchase_ids = list(
+        db.scalars(select(PurchaseItem.purchase_id).where(PurchaseItem.product_id == product_id).distinct()).all()
+    )
+    adjustment_ids = list(
+        db.scalars(
+            select(InventoryAdjustmentItem.adjustment_id)
+            .where(InventoryAdjustmentItem.product_id == product_id)
+            .distinct()
+        ).all()
+    )
 
     blocking = [
         ("movimientos de inventario", select(InventoryMovement.id).where(InventoryMovement.product_id == product_id)),
@@ -483,15 +497,75 @@ def delete_product(
         ("compras", select(PurchaseItem.id).where(PurchaseItem.product_id == product_id)),
     ]
     found = [label for label, stmt in blocking if db.scalar(stmt.limit(1)) is not None]
-    if found:
+
+    if found and not force:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
-                "No se puede eliminar: el producto tiene "
+                "El producto tiene "
                 + ", ".join(found)
-                + ". Desactívalo en su lugar para conservar la trazabilidad."
+                + ". Puedes desactivarlo o, si eres administrador, usar la eliminación definitiva."
             ),
         )
+
+    if found and force:
+        is_admin = any(role.code.upper() == "ADMIN" for role in current_user.roles)
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo un administrador puede eliminar un producto con historial.",
+            )
+
+        if sale_ids:
+            other_sale_item = db.scalar(
+                select(SaleItem.id)
+                .where(SaleItem.sale_id.in_(sale_ids), SaleItem.product_id != product_id)
+                .limit(1)
+            )
+            if other_sale_item is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Una de las ventas incluye otros productos. Anula o corrige esa venta antes de eliminar el producto.",
+                )
+
+        if purchase_ids:
+            other_purchase_item = db.scalar(
+                select(PurchaseItem.id)
+                .where(PurchaseItem.purchase_id.in_(purchase_ids), PurchaseItem.product_id != product_id)
+                .limit(1)
+            )
+            if other_purchase_item is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Una de las compras incluye otros productos. Corrige esa compra antes de eliminar el producto.",
+                )
+
+        if adjustment_ids:
+            other_adjustment_item = db.scalar(
+                select(InventoryAdjustmentItem.id)
+                .where(
+                    InventoryAdjustmentItem.adjustment_id.in_(adjustment_ids),
+                    InventoryAdjustmentItem.product_id != product_id,
+                )
+                .limit(1)
+            )
+            if other_adjustment_item is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Uno de los ajustes incluye otros productos. Corrige ese ajuste antes de eliminar el producto.",
+                )
+
+        db.execute(delete(InventoryMovement).where(InventoryMovement.product_id == product_id))
+        db.execute(delete(InventoryBalance).where(InventoryBalance.product_id == product_id))
+        db.execute(delete(InventoryAdjustmentItem).where(InventoryAdjustmentItem.product_id == product_id))
+        if adjustment_ids:
+            db.execute(delete(InventoryAdjustment).where(InventoryAdjustment.id.in_(adjustment_ids)))
+        if sale_ids:
+            db.execute(delete(SaleItem).where(SaleItem.sale_id.in_(sale_ids)))
+            db.execute(delete(Sale).where(Sale.id.in_(sale_ids)))
+        if purchase_ids:
+            db.execute(delete(PurchaseItem).where(PurchaseItem.purchase_id.in_(purchase_ids)))
+            db.execute(delete(Purchase).where(Purchase.id.in_(purchase_ids)))
 
     image_path = product.image_path
     db.delete(product)
@@ -501,8 +575,20 @@ def delete_product(
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail="No se pudo eliminar el producto") from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo eliminar el producto: {exc}",
+        ) from exc
 
     if image_path:
         remove_stored_image(settings.upload_dir, image_path)
 
-    return {"message": "Producto eliminado correctamente"}
+    return {
+        "message": (
+            "Producto e historial eliminados definitivamente"
+            if found and force
+            else "Producto eliminado correctamente"
+        )
+    }

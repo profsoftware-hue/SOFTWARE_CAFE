@@ -10,7 +10,13 @@ import {
   lookupCustomer,
   type CustomerCreatePayload,
 } from '@/api/catalogs'
-import { createSale, getSaleReceipt, listRecentSales } from '@/api/inventory'
+import {
+  cancelSale,
+  createSale,
+  getSaleReceipt,
+  listRecentSales,
+  type SaleCancellationType,
+} from '@/api/inventory'
 import { listProducts } from '@/api/products'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -90,6 +96,11 @@ export const PosPage = () => {
   const [error, setError] = useState<string | null>(null)
   const [receiptSaleId, setReceiptSaleId] = useState<number | null>(null)
   const [recentOpen, setRecentOpen] = useState(false)
+  const [showCancelled, setShowCancelled] = useState(false)
+  const [cancelSaleId, setCancelSaleId] = useState<number | null>(null)
+  const [cancelType, setCancelType] = useState<SaleCancellationType>('ERROR')
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState<string | null>(null)
 
   const productsQuery = useQuery({
     queryKey: ['products', 'pos'],
@@ -213,9 +224,29 @@ export const PosPage = () => {
   })
 
   const recentSalesQuery = useQuery({
-    queryKey: ['recent-sales'],
-    queryFn: () => listRecentSales(30),
+    queryKey: ['recent-sales', showCancelled],
+    queryFn: () => listRecentSales(30, showCancelled),
     enabled: recentOpen,
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: ({ saleId }: { saleId: number }) =>
+      cancelSale(saleId, { cancellation_type: cancelType, reason: cancelReason.trim() }),
+    onSuccess: (result) => {
+      setCancelSaleId(null)
+      setCancelReason('')
+      setCancelError(null)
+      setMessage(
+        `Venta ${result.sale_number} anulada. Nota crédito ${result.cancellation_number}.`,
+      )
+      setError(null)
+      void queryClient.invalidateQueries({ queryKey: ['recent-sales'] })
+      void queryClient.invalidateQueries({ queryKey: ['stock'] })
+      void queryClient.invalidateQueries({ queryKey: ['kardex'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      void queryClient.invalidateQueries({ queryKey: ['report'] })
+    },
+    onError: (unknownError) => setCancelError(getApiErrorMessage(unknownError)),
   })
 
   const addToCart = (product: Product) => {
@@ -842,9 +873,18 @@ export const PosPage = () => {
         open={recentOpen}
         onClose={(): void => setRecentOpen(false)}
         title="Últimas facturas"
-        description="Abre el recibo de una venta reciente para imprimirlo nuevamente."
-        className="max-w-4xl"
+        description="Consulta, reimprime o anula una venta. Las anuladas dejan de sumar en reportes y cierre."
+        className="max-w-5xl"
       >
+        <label className="mb-3 inline-flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={showCancelled}
+            onChange={(event): void => setShowCancelled(event.target.checked)}
+          />
+          Incluir ventas anuladas
+        </label>
+
         {recentSalesQuery.isLoading ? (
           <p className="text-sm text-slate-500">Cargando facturas recientes...</p>
         ) : null}
@@ -853,35 +893,133 @@ export const PosPage = () => {
           <EmptyState title="Sin facturas" description="Aún no hay ventas confirmadas." />
         ) : null}
         {recentSalesQuery.data && recentSalesQuery.data.length > 0 ? (
-          <Table columns={['Fecha', 'Factura', 'Cliente', 'Pago', 'Total', 'Factura electrónica', 'Acción']}>
+          <Table
+            columns={['Fecha', 'Factura', 'Cliente', 'Pago', 'Total', 'Estado', 'Factura electrónica', 'Acción']}
+          >
             {recentSalesQuery.data.map((sale) => (
               <tr key={sale.id}>
                 <td className="px-3 py-2.5 text-xs text-slate-500">{formatDateTime(sale.sold_at)}</td>
-                <td className="px-3 py-2.5 font-medium text-slate-800">{sale.sale_number}</td>
+                <td className="px-3 py-2.5">
+                  <p className="font-medium text-slate-800">{sale.sale_number}</p>
+                  {sale.cancellation_number ? (
+                    <p className="text-[11px] text-rose-600">Nota crédito: {sale.cancellation_number}</p>
+                  ) : null}
+                </td>
                 <td className="px-3 py-2.5">{sale.customer_name ?? 'Consumidor final'}</td>
                 <td className="px-3 py-2.5">{PAYMENT_METHOD_LABELS[sale.payment_method] ?? sale.payment_method}</td>
                 <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(sale.total)}</td>
+                <td className="px-3 py-2.5">
+                  <Badge variant={sale.status === 'CANCELLED' ? 'danger' : 'success'}>
+                    {sale.status === 'CANCELLED' ? 'Anulada' : 'Confirmada'}
+                  </Badge>
+                </td>
                 <td className="px-3 py-2.5">
                   <Badge variant={sale.invoice_requested ? 'success' : 'default'}>
                     {sale.invoice_requested ? 'Sí' : 'No'}
                   </Badge>
                 </td>
                 <td className="px-3 py-2.5">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={(): void => {
-                      setReceiptSaleId(sale.id)
-                      setRecentOpen(false)
-                    }}
-                  >
-                    Ver recibo
-                  </Button>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={(): void => {
+                        setReceiptSaleId(sale.id)
+                        setRecentOpen(false)
+                      }}
+                    >
+                      Ver recibo
+                    </Button>
+                    {sale.status === 'CONFIRMED' ? (
+                      <Button
+                        type="button"
+                        variant="danger"
+                        onClick={(): void => {
+                          setCancelSaleId(sale.id)
+                          setCancelType('ERROR')
+                          setCancelReason('')
+                          setCancelError(null)
+                          setRecentOpen(false)
+                        }}
+                      >
+                        Anular
+                      </Button>
+                    ) : null}
+                  </div>
                 </td>
               </tr>
             ))}
           </Table>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={cancelSaleId !== null}
+        onClose={(): void => {
+          setCancelSaleId(null)
+          setCancelReason('')
+          setCancelError(null)
+        }}
+        title="Anular venta"
+        description="Se devolverá el inventario y la venta dejará de sumar en reportes y cierre."
+        className="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Esta acción no se puede deshacer. La venta quedará registrada como anulada con su
+            número de nota crédito para auditoría.
+          </div>
+
+          <Select
+            label="Motivo de la anulación"
+            value={cancelType}
+            onChange={(event): void => setCancelType(event.target.value as SaleCancellationType)}
+          >
+            <option value="ERROR">Venta registrada por error</option>
+            <option value="CREDIT_NOTE">Nota crédito</option>
+            <option value="OTHER">Otro motivo</option>
+          </Select>
+
+          <Input
+            label="Detalle del motivo *"
+            value={cancelReason}
+            onChange={(event): void => setCancelReason(event.target.value)}
+            placeholder="Ej. Factura con precio equivocado"
+          />
+
+          {cancelError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+              {cancelError}
+            </div>
+          ) : null}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(): void => {
+                setCancelSaleId(null)
+                setCancelReason('')
+                setCancelError(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              loading={cancelMutation.isPending}
+              disabled={!cancelReason.trim()}
+              onClick={(): void => {
+                if (cancelSaleId !== null) {
+                  cancelMutation.mutate({ saleId: cancelSaleId })
+                }
+              }}
+            >
+              Confirmar anulación
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <ReceiptModal

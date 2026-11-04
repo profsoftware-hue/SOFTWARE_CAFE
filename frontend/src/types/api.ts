@@ -222,6 +222,7 @@ export interface CurrentStockRow {
   current_stock: string
   min_stock: string
   is_low_stock: boolean
+  is_active: boolean
   cost_price: string
   sale_price_excl_tax: string
   vat_rate: string
@@ -262,6 +263,7 @@ export interface RecentSale {
   invoice_requested: boolean
   total: string
   status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+  cancellation_number: string | null
 }
 
 export interface SaleReceiptItem {
@@ -288,6 +290,10 @@ export interface SaleReceipt {
   invoice_customer_document_number: string | null
   invoice_customer_email: string | null
   invoice_customer_phone: string | null
+  cancellation_number: string | null
+  cancellation_type: string | null
+  cancellation_reason: string | null
+  cancelled_at: string | null
   warehouse_name: string
   seller_name: string | null
   company_name: string

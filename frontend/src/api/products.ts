@@ -76,8 +76,13 @@ export const replaceProductImage = async (productId: number, image: File): Promi
   return data
 }
 
-export const deleteProduct = async (productId: number): Promise<{ message: string }> => {
-  const { data } = await apiClient.delete<{ message: string }>(`/products/${productId}`)
+export const deleteProduct = async (
+  productId: number,
+  force = false,
+): Promise<{ message: string }> => {
+  const { data } = await apiClient.delete<{ message: string }>(`/products/${productId}`, {
+    params: force ? { force: true } : undefined,
+  })
   return data
 }
 
