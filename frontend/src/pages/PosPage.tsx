@@ -430,7 +430,7 @@ export const PosPage = () => {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
+    <div className="grid gap-5 xl:grid-cols-[1fr_1.1fr]">
       <Card title="Punto de venta (POS)" subtitle="Busca productos por nombre, SKU o código de barras">
         <Input
           label="Buscar producto"
@@ -439,7 +439,7 @@ export const PosPage = () => {
           placeholder="Ej. Café, SKU-001, 770..."
         />
 
-        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2">
           {filteredProducts.length === 0 ? (
             <EmptyState
               title="No se encontraron productos"
@@ -471,10 +471,12 @@ export const PosPage = () => {
                 <Button
                   type="button"
                   className="shrink-0 px-2.5 py-1.5"
+                  aria-label={`Agregar ${product.name} al carrito`}
+                  title={`Agregar ${product.name}`}
                   onClick={(): void => addToCart(product)}
                 >
-                  <Plus size={14} className="sm:mr-1" />
-                  <span className="hidden sm:inline">Agregar</span>
+                  <Plus size={14} className="2xl:mr-1" />
+                  <span className="hidden 2xl:inline">Agregar</span>
                 </Button>
               </article>
             ))
