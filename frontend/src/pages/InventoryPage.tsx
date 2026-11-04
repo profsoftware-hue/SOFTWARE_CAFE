@@ -1,12 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Boxes, Eye, PackagePlus, Pencil, Plus, Power, Trash2 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 
 import { getApiErrorMessage } from '@/api/client'
 import { listWarehouses } from '@/api/catalogs'
 import { listCurrentStock, listKardex } from '@/api/inventory'
-import { addProductStock, createQuickProduct, deleteProduct, patchProduct } from '@/api/products'
+import {
+  addProductStock,
+  createQuickProduct,
+  deleteProduct,
+  patchProduct,
+  replaceProductImage,
+} from '@/api/products'
 import { useAuth } from '@/auth/context'
+import { AuthenticatedImage } from '@/components/AuthenticatedImage'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -63,6 +70,7 @@ export const InventoryPage = () => {
   const [showInactive, setShowInactive] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState<NewProductForm>(() => emptyNewProduct())
+  const [newImage, setNewImage] = useState<File | null>(null)
   const [newError, setNewError] = useState<string | null>(null)
   const [detailRow, setDetailRow] = useState<CurrentStockRow | null>(null)
   const [deleteRow, setDeleteRow] = useState<CurrentStockRow | null>(null)
@@ -79,6 +87,7 @@ export const InventoryPage = () => {
     vat_rate: '0.19',
     sku: '',
   })
+  const [editImage, setEditImage] = useState<File | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -111,6 +120,69 @@ export const InventoryPage = () => {
       }),
   })
 
+  const newImagePreview = useMemo(
+    () => (newImage ? URL.createObjectURL(newImage) : null),
+    [newImage],
+  )
+  const editImagePreview = useMemo(
+    () => (editImage ? URL.createObjectURL(editImage) : null),
+    [editImage],
+  )
+
+  useEffect(() => {
+    if (!newImagePreview) return
+    return () => URL.revokeObjectURL(newImagePreview)
+  }, [newImagePreview])
+
+  useEffect(() => {
+    if (!editImagePreview) return
+    return () => URL.revokeObjectURL(editImagePreview)
+  }, [editImagePreview])
+
+  const validateImage = (file: File): string | null => {
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      return 'Solo se permiten imágenes JPG o PNG.'
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      return 'La imagen supera el límite de 2 MB.'
+    }
+    return null
+  }
+
+  const handleNewImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    if (!file) {
+      setNewImage(null)
+      return
+    }
+    const error = validateImage(file)
+    if (error) {
+      setNewImage(null)
+      setNewError(error)
+      event.target.value = ''
+      return
+    }
+    setNewError(null)
+    setNewImage(file)
+  }
+
+  const handleEditImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null
+    if (!file) {
+      setEditImage(null)
+      return
+    }
+    const error = validateImage(file)
+    if (error) {
+      setEditImage(null)
+      setEditError(error)
+      event.target.value = ''
+      return
+    }
+    setEditError(null)
+    setEditImage(file)
+  }
+
   const invalidateInventory = () => {
     void queryClient.invalidateQueries({ queryKey: ['stock'] })
     void queryClient.invalidateQueries({ queryKey: ['kardex'] })
@@ -119,13 +191,35 @@ export const InventoryPage = () => {
   }
 
   const createMutation = useMutation({
-    mutationFn: createQuickProduct,
-    onSuccess: (product) => {
+    mutationFn: async ({
+      payload,
+      image,
+    }: {
+      payload: Parameters<typeof createQuickProduct>[0]
+      image: File | null
+    }) => {
+      const product = await createQuickProduct(payload)
+      if (!image) {
+        return { product, imageError: null }
+      }
+      try {
+        const updated = await replaceProductImage(product.id, image)
+        return { product: updated, imageError: null }
+      } catch (unknownError) {
+        return { product, imageError: getApiErrorMessage(unknownError) }
+      }
+    },
+    onSuccess: ({ product, imageError }) => {
       invalidateInventory()
       setNewOpen(false)
       setNewForm(emptyNewProduct())
+      setNewImage(null)
       setNewError(null)
-      setMessage(`Producto "${product.name}" creado y agregado al inventario.`)
+      setMessage(
+        imageError
+          ? `Producto "${product.name}" creado, pero la imagen no se pudo subir: ${imageError}`
+          : `Producto "${product.name}" creado y agregado al inventario.`,
+      )
       setActionError(null)
     },
     onError: (unknownError) => setNewError(getApiErrorMessage(unknownError)),
@@ -188,14 +282,37 @@ export const InventoryPage = () => {
   })
 
   const editMutation = useMutation({
-    mutationFn: ({ productId, payload }: { productId: number; payload: Parameters<typeof patchProduct>[1] }) =>
-      patchProduct(productId, payload),
-    onSuccess: (product) => {
+    mutationFn: async ({
+      productId,
+      payload,
+      image,
+    }: {
+      productId: number
+      payload: Parameters<typeof patchProduct>[1]
+      image: File | null
+    }) => {
+      const product = await patchProduct(productId, payload)
+      if (!image) {
+        return { product, imageError: null }
+      }
+      try {
+        const updated = await replaceProductImage(productId, image)
+        return { product: updated, imageError: null }
+      } catch (unknownError) {
+        return { product, imageError: getApiErrorMessage(unknownError) }
+      }
+    },
+    onSuccess: ({ product, imageError }) => {
       invalidateInventory()
       setEditRow(null)
+      setEditImage(null)
       setEditError(null)
       setActionError(null)
-      setMessage(`Producto "${product.name}" actualizado correctamente.`)
+      setMessage(
+        imageError
+          ? `Producto "${product.name}" actualizado, pero la imagen no se pudo subir: ${imageError}`
+          : `Producto "${product.name}" actualizado correctamente.`,
+      )
     },
     onError: (unknownError) => setEditError(getApiErrorMessage(unknownError)),
   })
@@ -208,6 +325,19 @@ export const InventoryPage = () => {
     setActionError(null)
   }
 
+  const openNewProduct = () => {
+    setNewForm(emptyNewProduct())
+    setNewImage(null)
+    setNewError(null)
+    setNewOpen(true)
+  }
+
+  const closeNewProduct = () => {
+    setNewOpen(false)
+    setNewImage(null)
+    setNewError(null)
+  }
+
   const openEdit = (row: CurrentStockRow) => {
     setEditRow(row)
     setEditForm({
@@ -217,6 +347,7 @@ export const InventoryPage = () => {
       vat_rate: row.vat_rate,
       sku: row.sku,
     })
+    setEditImage(null)
     setEditError(null)
     setMessage(null)
     setActionError(null)
@@ -245,6 +376,7 @@ export const InventoryPage = () => {
         vat_rate: Number(editForm.vat_rate),
         sku: editForm.sku.trim(),
       },
+      image: editImage,
     })
   }
 
@@ -262,12 +394,15 @@ export const InventoryPage = () => {
     }
 
     createMutation.mutate({
-      name,
-      quantity,
-      sale_price_excl_tax: price,
-      cost_price: parseDecimal(newForm.cost_price),
-      vat_rate: Number(newForm.vat_rate),
-      sku: newForm.sku.trim() || undefined,
+      payload: {
+        name,
+        quantity,
+        sale_price_excl_tax: price,
+        cost_price: parseDecimal(newForm.cost_price),
+        vat_rate: Number(newForm.vat_rate),
+        sku: newForm.sku.trim() || undefined,
+      },
+      image: newImage,
     })
   }
 
@@ -357,7 +492,7 @@ export const InventoryPage = () => {
               Exportar CSV
             </Button>
             {canManage ? (
-              <Button type="button" onClick={(): void => setNewOpen(true)}>
+              <Button type="button" onClick={openNewProduct}>
                 <Plus size={16} className="mr-1.5" />
                 Nuevo producto
               </Button>
@@ -474,8 +609,18 @@ export const InventoryPage = () => {
                 return (
                 <tr key={`${row.product_id}-${row.warehouse_id}`}>
                   <td className="px-2.5 py-2 sm:px-3">
-                    <p className="font-medium text-slate-800">{row.product_name}</p>
-                    <p className="text-xs text-slate-500">SKU: {row.sku}</p>
+                    <div className="flex items-center gap-2">
+                      <AuthenticatedImage
+                        path={row.image_path}
+                        alt={row.product_name}
+                        className="h-9 w-9 rounded-md border border-slate-200 object-cover"
+                        fallbackClassName="h-9 w-9 rounded-md border border-slate-200 bg-slate-50 text-[9px] text-slate-400"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-800">{row.product_name}</p>
+                        <p className="text-xs text-slate-500">SKU: {row.sku}</p>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.current_stock, 3)}</td>
                   <td className="px-2.5 py-2 sm:px-3">{formatNumber(row.sold_quantity, 3)}</td>
@@ -645,7 +790,7 @@ export const InventoryPage = () => {
 
       <Modal
         open={newOpen}
-        onClose={(): void => setNewOpen(false)}
+        onClose={closeNewProduct}
         title="Nuevo producto"
         description="El costo solo se pide una vez. Después solo agregas unidades."
         className="max-w-xl"
@@ -713,6 +858,33 @@ export const InventoryPage = () => {
               onChange={(event): void => setNewForm((prev) => ({ ...prev, sku: event.target.value }))}
               placeholder="Se genera automático"
             />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+              <p className="text-sm font-medium text-slate-700">
+                Imagen del producto (JPG o PNG, máximo 2 MB)
+              </p>
+              <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  onChange={handleNewImageChange}
+                  className="text-sm"
+                />
+                {newImagePreview ? (
+                  <img
+                    src={newImagePreview}
+                    alt="Vista previa del producto"
+                    className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-[10px] text-slate-400">
+                    Sin imagen
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                La imagen se verá en el POS y en la ventana de detalle.
+              </p>
+            </div>
             <PriceBreakdown
               basePrice={parseDecimal(newForm.sale_price_excl_tax)}
               vatRate={newForm.vat_rate}
@@ -727,7 +899,7 @@ export const InventoryPage = () => {
           ) : null}
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={(): void => setNewOpen(false)}>
+            <Button type="button" variant="secondary" onClick={closeNewProduct}>
               Cancelar
             </Button>
             <Button type="submit" loading={createMutation.isPending}>
@@ -857,6 +1029,36 @@ export const InventoryPage = () => {
                 value={editForm.sku}
                 onChange={(event): void => setEditForm((prev) => ({ ...prev, sku: event.target.value }))}
               />
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 md:col-span-2">
+                <p className="text-sm font-medium text-slate-700">
+                  Imagen del producto (JPG o PNG, máximo 2 MB)
+                </p>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {editImagePreview ? (
+                    <img
+                      src={editImagePreview}
+                      alt="Vista previa del producto"
+                      className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                    />
+                  ) : (
+                    <AuthenticatedImage
+                      path={editRow.image_path}
+                      alt={editRow.product_name}
+                      className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                      fallbackClassName="h-16 w-16 rounded-lg border border-dashed border-slate-300 bg-white text-[10px] text-slate-400"
+                    />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    onChange={handleEditImageChange}
+                    className="text-sm"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  Si seleccionas una nueva imagen, reemplazará la actual.
+                </p>
+              </div>
               <PriceBreakdown
                 basePrice={parseDecimal(editForm.sale_price_excl_tax)}
                 vatRate={editForm.vat_rate}
@@ -892,11 +1094,19 @@ export const InventoryPage = () => {
       >
         {detailRow ? (
           <div className="space-y-4">
-            <div>
-              <p className="text-lg font-semibold text-slate-800">{detailRow.product_name}</p>
-              <p className="text-sm text-slate-500">
-                SKU: {detailRow.sku} {detailRow.barcode ? `· Cod: ${detailRow.barcode}` : ''}
-              </p>
+            <div className="flex items-center gap-3">
+              <AuthenticatedImage
+                path={detailRow.image_path}
+                alt={detailRow.product_name}
+                className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                fallbackClassName="h-16 w-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-400"
+              />
+              <div>
+                <p className="text-lg font-semibold text-slate-800">{detailRow.product_name}</p>
+                <p className="text-sm text-slate-500">
+                  SKU: {detailRow.sku} {detailRow.barcode ? `· Cod: ${detailRow.barcode}` : ''}
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
