@@ -23,3 +23,29 @@ export const calculatePriceBreakdown = (
     total,
   }
 }
+
+export const calculatePriceFromFinal = (
+  finalPrice: number,
+  vatRate: number | string,
+): PriceBreakdownValues => {
+  const final = Number.isFinite(finalPrice) ? roundMoney(finalPrice) : 0
+  const rate = Number(vatRate)
+  const safeRate = Number.isFinite(rate) ? rate : 0
+  const base = roundMoney(final / (1 + safeRate))
+
+  return {
+    base,
+    vatRate: safeRate,
+    vat: roundMoney(final - base),
+    total: final,
+  }
+}
+
+export const calculatePriceForMode = (
+  value: number,
+  vatRate: number | string,
+  includesTax: boolean,
+): PriceBreakdownValues =>
+  includesTax
+    ? calculatePriceFromFinal(value, vatRate)
+    : calculatePriceBreakdown(value, vatRate)
