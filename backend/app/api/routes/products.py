@@ -516,56 +516,140 @@ def delete_product(
                 detail="Solo un administrador puede eliminar un producto con historial.",
             )
 
+        shared_sale_ids: set[int] = set()
         if sale_ids:
-            other_sale_item = db.scalar(
-                select(SaleItem.id)
-                .where(SaleItem.sale_id.in_(sale_ids), SaleItem.product_id != product_id)
-                .limit(1)
-            )
-            if other_sale_item is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Una de las ventas incluye otros productos. Anula o corrige esa venta antes de eliminar el producto.",
+            sale_rows = db.execute(
+                select(Sale.id, Sale.sale_number, Sale.status)
+                .join(SaleItem, SaleItem.sale_id == Sale.id)
+                .where(SaleItem.product_id == product_id)
+                .distinct()
+            ).all()
+            for sale_id_value, sale_number, sale_status in sale_rows:
+                other_sale_item = db.scalar(
+                    select(SaleItem.id)
+                    .where(
+                        SaleItem.sale_id == sale_id_value,
+                        SaleItem.product_id != product_id,
+                    )
+                    .limit(1)
                 )
+                if other_sale_item is None:
+                    continue
+                if sale_status != DocStatus.CANCELLED:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"La venta {sale_number} incluye otros productos. "
+                            "Anula esa venta completa antes de eliminar el producto."
+                        ),
+                    )
+                shared_sale_ids.add(sale_id_value)
 
+        shared_purchase_ids: set[int] = set()
         if purchase_ids:
-            other_purchase_item = db.scalar(
-                select(PurchaseItem.id)
-                .where(PurchaseItem.purchase_id.in_(purchase_ids), PurchaseItem.product_id != product_id)
-                .limit(1)
-            )
-            if other_purchase_item is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Una de las compras incluye otros productos. Corrige esa compra antes de eliminar el producto.",
+            purchase_rows = db.execute(
+                select(Purchase.id, Purchase.purchase_number, Purchase.status)
+                .join(PurchaseItem, PurchaseItem.purchase_id == Purchase.id)
+                .where(PurchaseItem.product_id == product_id)
+                .distinct()
+            ).all()
+            for purchase_id_value, purchase_number, purchase_status in purchase_rows:
+                other_purchase_item = db.scalar(
+                    select(PurchaseItem.id)
+                    .where(
+                        PurchaseItem.purchase_id == purchase_id_value,
+                        PurchaseItem.product_id != product_id,
+                    )
+                    .limit(1)
                 )
+                if other_purchase_item is None:
+                    continue
+                if purchase_status != DocStatus.CANCELLED:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"La compra {purchase_number} incluye otros productos. "
+                            "Corrige o anula esa compra antes de eliminar el producto."
+                        ),
+                    )
+                shared_purchase_ids.add(purchase_id_value)
 
+        shared_adjustment_ids: set[int] = set()
         if adjustment_ids:
-            other_adjustment_item = db.scalar(
-                select(InventoryAdjustmentItem.id)
-                .where(
-                    InventoryAdjustmentItem.adjustment_id.in_(adjustment_ids),
-                    InventoryAdjustmentItem.product_id != product_id,
+            adjustment_rows = db.execute(
+                select(
+                    InventoryAdjustment.id,
+                    InventoryAdjustment.adjustment_number,
+                    InventoryAdjustment.status,
+                    InventoryAdjustment.reference_sale_id,
                 )
-                .limit(1)
-            )
-            if other_adjustment_item is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Uno de los ajustes incluye otros productos. Corrige ese ajuste antes de eliminar el producto.",
+                .join(
+                    InventoryAdjustmentItem,
+                    InventoryAdjustmentItem.adjustment_id == InventoryAdjustment.id,
                 )
+                .where(InventoryAdjustmentItem.product_id == product_id)
+                .distinct()
+            ).all()
+            for (
+                adjustment_id_value,
+                adjustment_number,
+                adjustment_status,
+                reference_sale_id,
+            ) in adjustment_rows:
+                other_adjustment_item = db.scalar(
+                    select(InventoryAdjustmentItem.id)
+                    .where(
+                        InventoryAdjustmentItem.adjustment_id == adjustment_id_value,
+                        InventoryAdjustmentItem.product_id != product_id,
+                    )
+                    .limit(1)
+                )
+                if other_adjustment_item is None:
+                    continue
+                if reference_sale_id in shared_sale_ids:
+                    shared_adjustment_ids.add(adjustment_id_value)
+                    continue
+                if adjustment_status == DocStatus.CONFIRMED:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            f"El ajuste {adjustment_number} incluye otros productos. "
+                            "Corrige ese ajuste antes de eliminar el producto."
+                        ),
+                    )
+                shared_adjustment_ids.add(adjustment_id_value)
 
         db.execute(delete(InventoryMovement).where(InventoryMovement.product_id == product_id))
         db.execute(delete(InventoryBalance).where(InventoryBalance.product_id == product_id))
         db.execute(delete(InventoryAdjustmentItem).where(InventoryAdjustmentItem.product_id == product_id))
-        if adjustment_ids:
-            db.execute(delete(InventoryAdjustment).where(InventoryAdjustment.id.in_(adjustment_ids)))
-        if sale_ids:
-            db.execute(delete(SaleItem).where(SaleItem.sale_id.in_(sale_ids)))
-            db.execute(delete(Sale).where(Sale.id.in_(sale_ids)))
-        if purchase_ids:
-            db.execute(delete(PurchaseItem).where(PurchaseItem.purchase_id.in_(purchase_ids)))
-            db.execute(delete(Purchase).where(Purchase.id.in_(purchase_ids)))
+
+        full_adjustment_ids = [value for value in adjustment_ids if value not in shared_adjustment_ids]
+        if full_adjustment_ids:
+            db.execute(delete(InventoryAdjustment).where(InventoryAdjustment.id.in_(full_adjustment_ids)))
+
+        full_sale_ids = [value for value in sale_ids if value not in shared_sale_ids]
+        if shared_sale_ids:
+            db.execute(
+                delete(SaleItem).where(
+                    SaleItem.sale_id.in_(shared_sale_ids),
+                    SaleItem.product_id == product_id,
+                )
+            )
+        if full_sale_ids:
+            db.execute(delete(SaleItem).where(SaleItem.sale_id.in_(full_sale_ids)))
+            db.execute(delete(Sale).where(Sale.id.in_(full_sale_ids)))
+
+        full_purchase_ids = [value for value in purchase_ids if value not in shared_purchase_ids]
+        if shared_purchase_ids:
+            db.execute(
+                delete(PurchaseItem).where(
+                    PurchaseItem.purchase_id.in_(shared_purchase_ids),
+                    PurchaseItem.product_id == product_id,
+                )
+            )
+        if full_purchase_ids:
+            db.execute(delete(PurchaseItem).where(PurchaseItem.purchase_id.in_(full_purchase_ids)))
+            db.execute(delete(Purchase).where(Purchase.id.in_(full_purchase_ids)))
 
     image_path = product.image_path
     db.delete(product)
