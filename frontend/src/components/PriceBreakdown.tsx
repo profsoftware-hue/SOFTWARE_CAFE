@@ -19,17 +19,19 @@ export const PriceBreakdown = ({ basePrice, vatRate, className }: PriceBreakdown
       )}
     >
       <div>
-        <p className="text-[11px] uppercase tracking-wide text-slate-500">Antes de IVA</p>
+        <p className="text-[11px] uppercase tracking-wide text-slate-500">Valor antes de IVA</p>
         <p className="font-semibold">{formatCurrencyCOP(breakdown.base)}</p>
       </div>
       <div>
         <p className="text-[11px] uppercase tracking-wide text-slate-500">
-          IVA ({formatNumber(breakdown.vatRate * 100, 0)}%)
+          Valor del IVA ({formatNumber(breakdown.vatRate * 100, 0)}%)
         </p>
         <p className="font-semibold">{formatCurrencyCOP(breakdown.vat)}</p>
       </div>
       <div className="sm:text-right">
-        <p className="text-[11px] uppercase tracking-wide text-slate-500">Precio total de venta</p>
+        <p className="text-[11px] uppercase tracking-wide text-slate-500">
+          Precio total de venta (con IVA)
+        </p>
         <p className="text-base font-bold text-slate-900">{formatCurrencyCOP(breakdown.total)}</p>
       </div>
     </div>
