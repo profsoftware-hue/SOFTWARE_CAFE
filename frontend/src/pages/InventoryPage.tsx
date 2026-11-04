@@ -651,7 +651,7 @@ export const InventoryPage = () => {
                   <td className="px-2.5 py-2 sm:px-3">
                     <div className="flex items-center gap-2">
                       <AuthenticatedImage
-                        path={row.image_path}
+                        path={row.image_url}
                         alt={row.product_name}
                         className="h-9 w-9 rounded-md border border-slate-200 object-cover"
                         fallbackClassName="h-9 w-9 rounded-md border border-slate-200 bg-slate-50 text-[9px] text-slate-400"
@@ -1125,7 +1125,7 @@ export const InventoryPage = () => {
                     />
                   ) : (
                     <AuthenticatedImage
-                      path={editRow.image_path}
+                      path={editRow.image_url}
                       alt={editRow.product_name}
                       className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
                       fallbackClassName="h-16 w-16 rounded-lg border border-dashed border-slate-300 bg-white text-[10px] text-slate-400"
@@ -1180,7 +1180,7 @@ export const InventoryPage = () => {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <AuthenticatedImage
-                path={detailRow.image_path}
+                path={detailRow.image_url}
                 alt={detailRow.product_name}
                 className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
                 fallbackClassName="h-16 w-16 rounded-lg border border-dashed border-slate-300 bg-slate-50 text-[10px] text-slate-400"

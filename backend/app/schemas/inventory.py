@@ -128,6 +128,7 @@ class CurrentStockOut(BaseModel):
     barcode: str | None
     product_name: str
     image_path: str | None
+    image_url: str | None = None
     warehouse_id: int
     warehouse_code: str
     warehouse_name: str
