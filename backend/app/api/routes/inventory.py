@@ -517,7 +517,7 @@ def get_sale_receipt(
         cancelled_at=sale.cancelled_at,
         warehouse_name=warehouse.name if warehouse else "Bodega principal",
         seller_name=(seller.full_name or seller.username) if seller else None,
-        company_name=company.name if company else "FUNDACION NUESTRO FUTURO",
+        company_name=company.name if company else "CAMARA DE COMERCIO DE PEREIRA",
         company_nit=company.nit if company else None,
         company_address=company.address if company else None,
         company_phone=company.phone if company else None,
