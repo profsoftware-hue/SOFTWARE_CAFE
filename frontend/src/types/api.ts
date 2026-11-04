@@ -216,6 +216,7 @@ export interface CurrentStockRow {
   barcode: string | null
   product_name: string
   image_path: string | null
+  image_url: string | null
   warehouse_id: number
   warehouse_code: string
   warehouse_name: string

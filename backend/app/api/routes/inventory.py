@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_permissions
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.catalogs import Customer, Supplier, Warehouse
 from app.models.company import CompanyProfile
@@ -716,4 +717,12 @@ def current_stock(
     stmt = stmt.order_by(Warehouse.id.asc(), Product.name.asc())
 
     rows = db.execute(stmt).mappings().all()
-    return [CurrentStockOut(**row) for row in rows]
+    result: list[CurrentStockOut] = []
+    for row in rows:
+        data = dict(row)
+        image_path = data.get("image_path")
+        data["image_url"] = (
+            f"{settings.api_v1_prefix}/uploads/{image_path}" if image_path else None
+        )
+        result.append(CurrentStockOut(**data))
+    return result

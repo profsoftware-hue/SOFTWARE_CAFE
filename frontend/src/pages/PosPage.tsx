@@ -455,8 +455,8 @@ export const PosPage = () => {
                   <AuthenticatedImage
                     path={product.image_url}
                     alt={product.name}
-                    className="h-10 w-10 rounded-md border border-slate-200 object-cover"
-                    fallbackClassName="h-10 w-10 rounded-md border border-slate-200"
+                    className="h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                    fallbackClassName="h-16 w-16 rounded-lg border border-slate-200"
                   />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-800">{product.name}</p>
