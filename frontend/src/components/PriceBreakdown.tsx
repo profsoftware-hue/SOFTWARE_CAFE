@@ -1,15 +1,21 @@
 import { cn } from '@/lib/cn'
 import { formatCurrencyCOP, formatNumber } from '@/lib/format'
-import { calculatePriceBreakdown } from '@/lib/pricing'
+import { calculatePriceForMode } from '@/lib/pricing'
 
 interface PriceBreakdownProps {
-  basePrice: number
+  value: number
   vatRate: number | string
+  includesTax?: boolean
   className?: string
 }
 
-export const PriceBreakdown = ({ basePrice, vatRate, className }: PriceBreakdownProps) => {
-  const breakdown = calculatePriceBreakdown(basePrice, vatRate)
+export const PriceBreakdown = ({
+  value,
+  vatRate,
+  includesTax = false,
+  className,
+}: PriceBreakdownProps) => {
+  const breakdown = calculatePriceForMode(value, vatRate, includesTax)
 
   return (
     <div

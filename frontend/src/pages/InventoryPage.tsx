@@ -33,7 +33,7 @@ import {
   parseDecimal,
   toISODate,
 } from '@/lib/format'
-import { calculatePriceBreakdown } from '@/lib/pricing'
+import { calculatePriceBreakdown, calculatePriceFromFinal } from '@/lib/pricing'
 import type { CurrentStockRow } from '@/types/api'
 
 type InventoryTab = 'products' | 'kardex'
@@ -41,6 +41,7 @@ type InventoryTab = 'products' | 'kardex'
 interface NewProductForm {
   name: string
   sale_price_excl_tax: string
+  priceIncludesTax: boolean
   cost_price: string
   quantity: string
   vat_rate: string
@@ -50,6 +51,7 @@ interface NewProductForm {
 const emptyNewProduct = (): NewProductForm => ({
   name: '',
   sale_price_excl_tax: '',
+  priceIncludesTax: false,
   cost_price: '',
   quantity: '1',
   vat_rate: '0.19',
@@ -83,6 +85,7 @@ export const InventoryPage = () => {
   const [editForm, setEditForm] = useState({
     name: '',
     sale_price_excl_tax: '',
+    priceIncludesTax: false,
     cost_price: '',
     vat_rate: '0.19',
     sku: '',
@@ -338,11 +341,42 @@ export const InventoryPage = () => {
     setNewError(null)
   }
 
+  const toggleNewPriceMode = (includesTax: boolean) => {
+    if (!newForm.sale_price_excl_tax.trim()) {
+      setNewForm((prev) => ({ ...prev, priceIncludesTax: includesTax }))
+      return
+    }
+    const rate = Number(newForm.vat_rate)
+    const current = parseDecimal(newForm.sale_price_excl_tax)
+    const converted = includesTax ? current * (1 + rate) : current / (1 + rate)
+    setNewForm((prev) => ({
+      ...prev,
+      priceIncludesTax: includesTax,
+      sale_price_excl_tax: formatNumber(converted, 2),
+    }))
+  }
+
+  const toggleEditPriceMode = (includesTax: boolean) => {
+    if (!editForm.sale_price_excl_tax.trim()) {
+      setEditForm((prev) => ({ ...prev, priceIncludesTax: includesTax }))
+      return
+    }
+    const rate = Number(editForm.vat_rate)
+    const current = parseDecimal(editForm.sale_price_excl_tax)
+    const converted = includesTax ? current * (1 + rate) : current / (1 + rate)
+    setEditForm((prev) => ({
+      ...prev,
+      priceIncludesTax: includesTax,
+      sale_price_excl_tax: formatNumber(converted, 2),
+    }))
+  }
+
   const openEdit = (row: CurrentStockRow) => {
     setEditRow(row)
     setEditForm({
       name: row.product_name,
       sale_price_excl_tax: formatNumber(row.sale_price_excl_tax, 2),
+      priceIncludesTax: false,
       cost_price: formatNumber(row.cost_price, 2),
       vat_rate: row.vat_rate,
       sku: row.sku,
@@ -359,7 +393,10 @@ export const InventoryPage = () => {
     setEditError(null)
 
     const name = editForm.name.trim()
-    const price = parseDecimal(editForm.sale_price_excl_tax)
+    const enteredPrice = parseDecimal(editForm.sale_price_excl_tax)
+    const price = editForm.priceIncludesTax
+      ? calculatePriceFromFinal(enteredPrice, editForm.vat_rate).base
+      : enteredPrice
     const cost = parseDecimal(editForm.cost_price)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(cost) || cost < 0) {
@@ -385,7 +422,10 @@ export const InventoryPage = () => {
     setNewError(null)
 
     const name = newForm.name.trim()
-    const price = parseDecimal(newForm.sale_price_excl_tax)
+    const enteredPrice = parseDecimal(newForm.sale_price_excl_tax)
+    const price = newForm.priceIncludesTax
+      ? calculatePriceFromFinal(enteredPrice, newForm.vat_rate).base
+      : enteredPrice
     const quantity = parseDecimal(newForm.quantity)
 
     if (!name || Number.isNaN(price) || price < 0 || Number.isNaN(quantity) || quantity <= 0) {
@@ -447,7 +487,7 @@ export const InventoryPage = () => {
         'SKU',
         'Bodega',
         'Precio venta',
-        'Costo',
+        'Costo de compra',
         'Stock actual',
         'Vendidos',
         'Total vendido',
@@ -765,7 +805,7 @@ export const InventoryPage = () => {
                 'Tipo',
                 'Dirección',
                 'Cantidad',
-                { label: 'Costo', className: 'hidden 2xl:table-cell' },
+                { label: 'Costo de compra', className: 'hidden 2xl:table-cell' },
               ]}
             >
               {kardexQuery.data.map((movement) => (
@@ -804,9 +844,26 @@ export const InventoryPage = () => {
             required
           />
 
+          <label className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={newForm.priceIncludesTax}
+              onChange={(event): void => toggleNewPriceMode(event.target.checked)}
+            />
+            <span>
+              <span className="block font-semibold text-slate-800">
+                El precio que ingreso ya incluye IVA
+              </span>
+              <span className="block text-xs text-slate-500">
+                Si lo marcas, escribe el valor final que paga el cliente y el sistema separa el IVA.
+              </span>
+            </span>
+          </label>
+
           <div className="grid gap-3 md:grid-cols-2">
             <Input
-              label="Precio antes de IVA *"
+              label={newForm.priceIncludesTax ? 'Precio final con IVA *' : 'Precio antes de IVA *'}
               type="text"
               inputMode="decimal"
               value={newForm.sale_price_excl_tax}
@@ -816,8 +873,12 @@ export const InventoryPage = () => {
                   sale_price_excl_tax: formatDecimalInput(event.target.value, 2),
                 }))
               }
-              placeholder="Ej. 12.500,50"
-              helperText="Usa coma para decimales."
+              placeholder={newForm.priceIncludesTax ? 'Ej. 90.000' : 'Ej. 75.630,25'}
+              helperText={
+                newForm.priceIncludesTax
+                  ? 'Es el valor final que paga el cliente.'
+                  : 'Es el valor sin IVA. Usa coma para decimales.'
+              }
               required
             />
             <Input
@@ -833,7 +894,7 @@ export const InventoryPage = () => {
               required
             />
             <Input
-              label="Costo unitario (solo una vez)"
+              label="Costo de compra (solo una vez)"
               type="text"
               inputMode="decimal"
               value={newForm.cost_price}
@@ -841,7 +902,7 @@ export const InventoryPage = () => {
                 setNewForm((prev) => ({ ...prev, cost_price: formatDecimalInput(event.target.value, 2) }))
               }
               placeholder="0"
-              helperText="Se guarda y ya no se vuelve a pedir."
+              helperText="Lo que te cuesta el producto. No se suma al precio de venta."
             />
             <Select
               label="IVA"
@@ -886,8 +947,9 @@ export const InventoryPage = () => {
               </p>
             </div>
             <PriceBreakdown
-              basePrice={parseDecimal(newForm.sale_price_excl_tax)}
+              value={parseDecimal(newForm.sale_price_excl_tax)}
               vatRate={newForm.vat_rate}
+              includesTax={newForm.priceIncludesTax}
               className="md:col-span-2"
             />
           </div>
@@ -985,9 +1047,26 @@ export const InventoryPage = () => {
               required
             />
 
+            <label className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={editForm.priceIncludesTax}
+                onChange={(event): void => toggleEditPriceMode(event.target.checked)}
+              />
+              <span>
+                <span className="block font-semibold text-slate-800">
+                  El precio que ingreso ya incluye IVA
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Escribe el valor final que paga el cliente y el sistema separa el IVA.
+                </span>
+              </span>
+            </label>
+
             <div className="grid gap-3 md:grid-cols-2">
               <Input
-                label="Precio antes de IVA *"
+                label={editForm.priceIncludesTax ? 'Precio final con IVA *' : 'Precio antes de IVA *'}
                 type="text"
                 inputMode="decimal"
                 value={editForm.sale_price_excl_tax}
@@ -997,12 +1076,16 @@ export const InventoryPage = () => {
                     sale_price_excl_tax: formatDecimalInput(event.target.value, 2),
                   }))
                 }
-                placeholder="Ej. 12.500,50"
-                helperText="Usa coma para decimales."
+                placeholder={editForm.priceIncludesTax ? 'Ej. 90.000' : 'Ej. 75.630,25'}
+                helperText={
+                  editForm.priceIncludesTax
+                    ? 'Es el valor final que paga el cliente.'
+                    : 'Es el valor sin IVA. Usa coma para decimales.'
+                }
                 required
               />
               <Input
-                label="Costo unitario *"
+                label="Costo de compra *"
                 type="text"
                 inputMode="decimal"
                 value={editForm.cost_price}
@@ -1013,7 +1096,7 @@ export const InventoryPage = () => {
                   }))
                 }
                 placeholder="0"
-                required
+                helperText="Lo que te cuesta. No afecta el precio de venta."
               />
               <Select
                 label="IVA"
@@ -1060,8 +1143,9 @@ export const InventoryPage = () => {
                 </p>
               </div>
               <PriceBreakdown
-                basePrice={parseDecimal(editForm.sale_price_excl_tax)}
+                value={parseDecimal(editForm.sale_price_excl_tax)}
                 vatRate={editForm.vat_rate}
+                includesTax={editForm.priceIncludesTax}
                 className="md:col-span-2"
               />
             </div>
@@ -1141,7 +1225,7 @@ export const InventoryPage = () => {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Costo</p>
+                <p className="text-xs text-slate-500">Costo de compra</p>
                 <p className="font-semibold text-slate-800">{formatCurrencyCOP(detailRow.cost_price)}</p>
               </div>
               <div>
