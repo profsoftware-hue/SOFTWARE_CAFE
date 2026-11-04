@@ -362,6 +362,80 @@ def test_product_sale_and_closing() -> None:
     assert client.get(f"/api/v1/products/{product_id}", headers=headers).status_code == 404
 
 
+def test_shared_sale_requires_cancellation_before_force_delete() -> None:
+    _ensure_admin()
+    headers = _login_headers()
+
+    product_a = client.post(
+        "/api/v1/products/quick",
+        json={
+            "name": "Producto compartido A",
+            "quantity": 5,
+            "cost_price": 500,
+            "sale_price_excl_tax": 1000,
+            "sku": "SMOKE-SHARED-A",
+        },
+        headers=headers,
+    )
+    assert product_a.status_code == 201, product_a.text
+    product_a_id = product_a.json()["id"]
+
+    product_b = client.post(
+        "/api/v1/products/quick",
+        json={
+            "name": "Producto compartido B",
+            "quantity": 5,
+            "cost_price": 800,
+            "sale_price_excl_tax": 2000,
+            "sku": "SMOKE-SHARED-B",
+        },
+        headers=headers,
+    )
+    assert product_b.status_code == 201, product_b.text
+    product_b_id = product_b.json()["id"]
+
+    sale = client.post(
+        "/api/v1/inventory/sales",
+        json={
+            "warehouse_id": 1,
+            "payment_method": "CASH",
+            "items": [
+                {"product_id": product_a_id, "quantity": 1},
+                {"product_id": product_b_id, "quantity": 1},
+            ],
+            "confirm": True,
+        },
+        headers=headers,
+    )
+    assert sale.status_code == 201, sale.text
+    sale_id = sale.json()["id"]
+    sale_number = sale.json()["number"]
+
+    blocked = client.delete(f"/api/v1/products/{product_a_id}?force=true", headers=headers)
+    assert blocked.status_code == 409
+    assert sale_number in blocked.json()["detail"]
+
+    cancelled = client.post(
+        f"/api/v1/inventory/sales/{sale_id}/cancel",
+        json={"cancellation_type": "ERROR", "reason": "Venta de prueba compartida"},
+        headers=headers,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+
+    deleted_a = client.delete(f"/api/v1/products/{product_a_id}?force=true", headers=headers)
+    assert deleted_a.status_code == 200, deleted_a.text
+    assert client.get(f"/api/v1/products/{product_a_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/products/{product_b_id}", headers=headers).status_code == 200
+
+    cancelled_receipt = client.get(f"/api/v1/inventory/sales/{sale_id}/receipt", headers=headers)
+    assert cancelled_receipt.status_code == 200
+    assert cancelled_receipt.json()["status"] == "CANCELLED"
+    assert len(cancelled_receipt.json()["items"]) == 1
+
+    deleted_b = client.delete(f"/api/v1/products/{product_b_id}?force=true", headers=headers)
+    assert deleted_b.status_code == 200, deleted_b.text
+
+
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()
     admin_headers = _login_headers()
