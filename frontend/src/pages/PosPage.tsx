@@ -439,7 +439,7 @@ export const PosPage = () => {
           placeholder="Ej. Café, SKU-001, 770..."
         />
 
-        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="mt-3 grid max-h-[calc(100vh-230px)] auto-rows-min grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-2 overflow-auto pr-1 scrollbar-thin">
           {filteredProducts.length === 0 ? (
             <EmptyState
               title="No se encontraron productos"
