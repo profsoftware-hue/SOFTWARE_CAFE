@@ -430,7 +430,7 @@ export const PosPage = () => {
   }
 
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(380px,1.1fr)] xl:grid-cols-[1fr_1.1fr]">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(420px,1.15fr)] xl:grid-cols-[0.85fr_1.15fr]">
       <Card title="Punto de venta (POS)" subtitle="Busca productos por nombre, SKU o código de barras">
         <Input
           label="Buscar producto"
@@ -439,7 +439,7 @@ export const PosPage = () => {
           placeholder="Ej. Café, SKU-001, 770..."
         />
 
-        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="mt-3 grid max-h-[calc(100vh-230px)] auto-rows-min grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-2 overflow-auto pr-1 scrollbar-thin">
           {filteredProducts.length === 0 ? (
             <EmptyState
               title="No se encontraron productos"
@@ -459,7 +459,9 @@ export const PosPage = () => {
                     fallbackClassName="h-16 w-16 rounded-lg border border-slate-200"
                   />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-800">{product.name}</p>
+                    <p className="truncate text-sm font-semibold text-slate-800" title={product.name}>
+                      {product.name}
+                    </p>
                     <p className="truncate text-[11px] text-slate-500">
                       {product.sku}{product.barcode ? ` · ${product.barcode}` : ''}
                     </p>
