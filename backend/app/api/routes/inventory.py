@@ -30,6 +30,8 @@ from app.schemas.inventory import (
     PosQuoteResponse,
     PurchaseCreate,
     RecentSaleOut,
+    SaleCancelOut,
+    SaleCancelRequest,
     SaleCreate,
     SaleReceiptItemOut,
     SaleReceiptOut,
@@ -337,6 +339,7 @@ def recent_sales(
     db: Session = Depends(get_db),
     _: User = Depends(require_permissions("sales.create")),
     limit: int = Query(default=30, ge=1, le=100),
+    include_cancelled: bool = Query(default=False),
 ) -> list[RecentSaleOut]:
     stmt = (
         select(
@@ -348,14 +351,131 @@ def recent_sales(
             Sale.invoice_requested,
             Sale.total,
             Sale.status,
+            Sale.cancellation_number,
         )
         .outerjoin(Customer, Customer.id == Sale.customer_id)
-        .where(Sale.status == DocStatus.CONFIRMED)
+        .where(
+            Sale.status.in_(
+                [DocStatus.CONFIRMED, DocStatus.CANCELLED]
+                if include_cancelled
+                else [DocStatus.CONFIRMED]
+            )
+        )
         .order_by(desc(Sale.sold_at), desc(Sale.id))
         .limit(limit)
     )
     rows = db.execute(stmt).mappings().all()
     return [RecentSaleOut(**row) for row in rows]
+
+
+@router.post("/sales/{sale_id}/cancel", response_model=SaleCancelOut)
+def cancel_sale(
+    sale_id: int,
+    payload: SaleCancelRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permissions("sales.create")),
+) -> SaleCancelOut:
+    """Anula una venta, devuelve el inventario y registra la nota crédito."""
+    sale = db.get(Sale, sale_id)
+    if not sale:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+    if sale.status == DocStatus.CANCELLED:
+        raise HTTPException(status_code=400, detail="La venta ya está anulada")
+    if sale.status != DocStatus.CONFIRMED:
+        raise HTTPException(status_code=400, detail="Solo se pueden anular ventas confirmadas")
+
+    existing_return = db.scalar(
+        select(InventoryAdjustment.id).where(
+            InventoryAdjustment.reference_sale_id == sale_id,
+            InventoryAdjustment.adjustment_type == AdjustmentType.CUSTOMER_RETURN,
+        )
+    )
+    if existing_return is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="La venta ya tiene una devolución registrada. Revisa el inventario antes de anularla.",
+        )
+
+    items = db.scalars(select(SaleItem).where(SaleItem.sale_id == sale_id).order_by(SaleItem.id.asc())).all()
+    if not items:
+        raise HTTPException(status_code=400, detail="La venta no tiene ítems para devolver")
+
+    product_ids = {item.product_id for item in items}
+    products = {
+        product.id: product
+        for product in db.scalars(select(Product).where(Product.id.in_(product_ids))).all()
+    }
+
+    cancellation_number = generate_document_number(
+        "NC" if payload.cancellation_type == "CREDIT_NOTE" else "ANUL"
+    )
+    cancellation_reason = payload.reason.strip()
+    cancelled_at = _now_utc()
+
+    adjustment = InventoryAdjustment(
+        adjustment_number=generate_document_number("DEV"),
+        adjustment_type=AdjustmentType.CUSTOMER_RETURN,
+        warehouse_id=sale.warehouse_id,
+        reference_sale_id=sale.id,
+        adjusted_at=cancelled_at,
+        status=DocStatus.DRAFT,
+        reason=f"Anulación de venta {sale.sale_number}: {cancellation_reason}",
+        note=f"Nota crédito {cancellation_number}",
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(adjustment)
+    db.flush()
+
+    returned_quantity = Decimal("0")
+    for item in items:
+        product = products.get(item.product_id)
+        unit_cost = product.cost_price if product else item.unit_price_excl_tax
+        db.add(
+            InventoryAdjustmentItem(
+                adjustment_id=adjustment.id,
+                product_id=item.product_id,
+                quantity=item.quantity,
+                unit_cost=unit_cost,
+                note=f"Devolución por anulación de {sale.sale_number}",
+            )
+        )
+        returned_quantity += item.quantity
+
+    # Los ítems deben existir antes de confirmar el ajuste para que el trigger
+    # inserte los movimientos de entrada al inventario.
+    db.flush()
+    adjustment.status = DocStatus.CONFIRMED
+
+    sale.status = DocStatus.CANCELLED
+    sale.cancellation_number = cancellation_number
+    sale.cancellation_type = payload.cancellation_type
+    sale.cancellation_reason = cancellation_reason
+    sale.cancelled_at = cancelled_at
+    sale.cancelled_by = current_user.id
+    sale.updated_by = current_user.id
+    db.flush()
+
+    try:
+        db.commit()
+    except (IntegrityError, DBAPIError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo anular la venta: {_extract_db_error(exc)}",
+        ) from exc
+
+    return SaleCancelOut(
+        sale_id=sale.id,
+        sale_number=sale.sale_number,
+        status=sale.status,
+        cancellation_number=cancellation_number,
+        cancellation_type=payload.cancellation_type,
+        cancellation_reason=cancellation_reason,
+        cancelled_at=cancelled_at,
+        returned_items=len(items),
+        returned_quantity=returned_quantity,
+    )
 
 
 @router.get("/sales/{sale_id}/receipt", response_model=SaleReceiptOut)
@@ -390,6 +510,10 @@ def get_sale_receipt(
         invoice_customer_document_number=sale.invoice_customer_document_number,
         invoice_customer_email=sale.invoice_customer_email,
         invoice_customer_phone=sale.invoice_customer_phone,
+        cancellation_number=sale.cancellation_number,
+        cancellation_type=sale.cancellation_type,
+        cancellation_reason=sale.cancellation_reason,
+        cancelled_at=sale.cancelled_at,
         warehouse_name=warehouse.name if warehouse else "Bodega principal",
         seller_name=(seller.full_name or seller.username) if seller else None,
         company_name=company.name if company else "FUNDACION NUESTRO FUTURO",
@@ -518,6 +642,7 @@ def current_stock(
     search: str | None = Query(default=None),
     warehouse_id: int | None = Query(default=None),
     low_only: bool = Query(default=False),
+    include_inactive: bool = Query(default=False),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
 ) -> list[CurrentStockOut]:
@@ -554,6 +679,7 @@ def current_stock(
             current_stock_expr.label("current_stock"),
             Product.min_stock,
             (current_stock_expr <= Product.min_stock).label("is_low_stock"),
+            Product.is_active,
             Product.cost_price,
             Product.sale_price_excl_tax,
             Product.vat_rate,
@@ -571,8 +697,11 @@ def current_stock(
             sold,
             and_(sold.c.product_id == Product.id, sold.c.warehouse_id == Warehouse.id),
         )
-        .where(Product.is_active.is_(True), Warehouse.is_active.is_(True))
+        .where(Warehouse.is_active.is_(True))
     )
+
+    if not include_inactive:
+        stmt = stmt.where(Product.is_active.is_(True))
 
     if warehouse_id is not None:
         stmt = stmt.where(Warehouse.id == warehouse_id)

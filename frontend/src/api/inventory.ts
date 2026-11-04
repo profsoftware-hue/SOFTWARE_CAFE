@@ -26,10 +26,37 @@ export const getSaleReceipt = async (saleId: number): Promise<SaleReceipt> => {
   return data
 }
 
-export const listRecentSales = async (limit = 30): Promise<RecentSale[]> => {
+export const listRecentSales = async (
+  limit = 30,
+  includeCancelled = false,
+): Promise<RecentSale[]> => {
   const { data } = await apiClient.get<RecentSale[]>('/inventory/sales/recent', {
-    params: { limit },
+    params: { limit, include_cancelled: includeCancelled },
   })
+  return data
+}
+
+export type SaleCancellationType = 'CREDIT_NOTE' | 'ERROR' | 'OTHER'
+
+export interface CancelSalePayload {
+  cancellation_type: SaleCancellationType
+  reason: string
+}
+
+export interface CancelSaleResult {
+  sale_id: number
+  sale_number: string
+  status: 'CANCELLED'
+  cancellation_number: string
+  cancellation_type: SaleCancellationType
+  cancellation_reason: string
+  cancelled_at: string
+  returned_items: number
+  returned_quantity: string
+}
+
+export const cancelSale = async (saleId: number, payload: CancelSalePayload): Promise<CancelSaleResult> => {
+  const { data } = await apiClient.post<CancelSaleResult>(`/inventory/sales/${saleId}/cancel`, payload)
   return data
 }
 
@@ -68,6 +95,7 @@ export interface CurrentStockParams {
   search?: string
   warehouse_id?: number
   low_only?: boolean
+  include_inactive?: boolean
   date_from?: string
   date_to?: string
 }

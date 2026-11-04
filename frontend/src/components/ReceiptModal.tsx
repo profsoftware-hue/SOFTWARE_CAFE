@@ -32,6 +32,9 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
   const printReceipt = () => {
     if (!receipt) return
 
+    const documentTitle =
+      receipt.status === 'CANCELLED' ? 'NOTA CRÉDITO - VENTA ANULADA' : 'RECIBO DE VENTA'
+
     const rows = receipt.items
       .map(
         (item) => `
@@ -89,13 +92,20 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
     </div>
   </div>
 
-  <div class="title">RECIBO DE VENTA</div>
+  <div class="title">${documentTitle}</div>
 
   <div class="data">
     <div><span>No.</span><strong>${escapeHtml(receipt.sale_number)}</strong></div>
     <div><span>Fecha</span><span>${formatDateTime(receipt.sold_at)}</span></div>
     <div><span>Cliente</span><span>${escapeHtml(receipt.customer_name ?? 'Consumidor final')}</span></div>
     <div><span>Pago</span><span>${escapeHtml(PAYMENT_METHOD_LABELS[receipt.payment_method] ?? receipt.payment_method)}</span></div>
+    ${
+      receipt.status === 'CANCELLED'
+        ? `<div><span>Estado</span><strong>ANULADA</strong></div>
+           <div><span>Nota crédito</span><span>${escapeHtml(receipt.cancellation_number ?? '-')}</span></div>
+           <div><span>Motivo</span><span>${escapeHtml(receipt.cancellation_reason ?? '-')}</span></div>`
+        : ''
+    }
     ${
       receipt.invoice_requested
         ? `<div><span>Factura electrónica</span><span>Sí</span></div>
@@ -148,7 +158,9 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
       <section className="max-h-[92vh] w-full max-w-md overflow-auto rounded-xl bg-white p-4 shadow-xl print:max-h-none print:max-w-none print:overflow-visible print:shadow-none">
         <header className="mb-3 flex items-center justify-between gap-2 print:hidden">
           <div>
-            <h3 className="text-base font-semibold text-slate-800">Recibo de venta</h3>
+            <h3 className="text-base font-semibold text-slate-800">
+              {receipt?.status === 'CANCELLED' ? 'Nota crédito / venta anulada' : 'Recibo de venta'}
+            </h3>
             <p className="text-xs text-slate-500">Puedes imprimirlo o cerrarlo.</p>
           </div>
           <button
@@ -179,7 +191,7 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
             </div>
 
             <p className="my-2 border-y border-dashed border-slate-300 py-1 text-center text-xs font-bold uppercase tracking-wide text-slate-700">
-              Recibo de venta
+              {receipt.status === 'CANCELLED' ? 'Nota crédito - venta anulada' : 'Recibo de venta'}
             </p>
 
             <div className="space-y-0.5 text-[11px] text-slate-600">
@@ -217,6 +229,22 @@ export const ReceiptModal = ({ open, receipt, loading = false, onClose }: Receip
                   <div className="flex justify-between gap-2">
                     <span>Correo</span>
                     <span>{receipt.invoice_customer_email ?? '-'}</span>
+                  </div>
+                </>
+              ) : null}
+              {receipt.status === 'CANCELLED' ? (
+                <>
+                  <div className="flex justify-between gap-2">
+                    <span>Estado</span>
+                    <span className="font-semibold text-rose-700">ANULADA</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>Nota crédito</span>
+                    <span className="font-semibold">{receipt.cancellation_number ?? '-'}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span>Motivo</span>
+                    <span className="text-right">{receipt.cancellation_reason ?? '-'}</span>
                   </div>
                 </>
               ) : null}

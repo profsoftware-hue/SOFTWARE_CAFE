@@ -305,6 +305,62 @@ def test_product_sale_and_closing() -> None:
     assert float(updated_product["min_stock"]) == 2.5
     assert float(updated_product["final_price_incl_tax"]) == 1190.89
 
+    stock_before = next(
+        item for item in client.get("/api/v1/inventory/stock/current", headers=headers).json()
+        if item["product_id"] == product_id
+    )
+    cancelled = client.post(
+        f"/api/v1/inventory/sales/{invoice_sale_id}/cancel",
+        json={"cancellation_type": "ERROR", "reason": "Facturación equivocada"},
+        headers=headers,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    cancelled_data = cancelled.json()
+    assert cancelled_data["status"] == "CANCELLED"
+    assert cancelled_data["cancellation_number"].startswith("ANUL-")
+    assert float(cancelled_data["returned_quantity"]) == 1.0
+
+    stock_after = next(
+        item for item in client.get("/api/v1/inventory/stock/current", headers=headers).json()
+        if item["product_id"] == product_id
+    )
+    assert float(stock_after["current_stock"]) == float(stock_before["current_stock"]) + 1.0
+
+    cancelled_receipt = client.get(
+        f"/api/v1/inventory/sales/{invoice_sale_id}/receipt",
+        headers=headers,
+    )
+    assert cancelled_receipt.status_code == 200
+    assert cancelled_receipt.json()["status"] == "CANCELLED"
+    assert cancelled_receipt.json()["cancellation_number"] == cancelled_data["cancellation_number"]
+
+    recent_without_cancelled = client.get(
+        "/api/v1/inventory/sales/recent?limit=20",
+        headers=headers,
+    )
+    assert all(item["id"] != invoice_sale_id for item in recent_without_cancelled.json())
+
+    recent_with_cancelled = client.get(
+        "/api/v1/inventory/sales/recent?limit=20&include_cancelled=true",
+        headers=headers,
+    )
+    cancelled_recent = next(item for item in recent_with_cancelled.json() if item["id"] == invoice_sale_id)
+    assert cancelled_recent["status"] == "CANCELLED"
+    assert cancelled_recent["cancellation_number"] == cancelled_data["cancellation_number"]
+
+    invoice_requests_after_cancel = client.get(
+        f"/api/v1/reports/invoice-requests?date_from={today}&date_to={today}",
+        headers=headers,
+    )
+    assert all(item["sale_id"] != invoice_sale_id for item in invoice_requests_after_cancel.json())
+
+    blocked_delete = client.delete(f"/api/v1/products/{product_id}", headers=headers)
+    assert blocked_delete.status_code == 409
+
+    forced_delete = client.delete(f"/api/v1/products/{product_id}?force=true", headers=headers)
+    assert forced_delete.status_code == 200, forced_delete.text
+    assert client.get(f"/api/v1/products/{product_id}", headers=headers).status_code == 404
+
 
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()

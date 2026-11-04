@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -133,6 +134,7 @@ class CurrentStockOut(BaseModel):
     current_stock: Decimal
     min_stock: Decimal
     is_low_stock: bool
+    is_active: bool = True
     cost_price: Decimal
     sale_price_excl_tax: Decimal
     vat_rate: Decimal
@@ -158,6 +160,24 @@ class RecentSaleOut(BaseModel):
     invoice_requested: bool
     total: Decimal
     status: DocStatus
+    cancellation_number: str | None = None
+
+
+class SaleCancelRequest(BaseModel):
+    cancellation_type: Literal["CREDIT_NOTE", "ERROR", "OTHER"] = "ERROR"
+    reason: str = Field(..., min_length=3, max_length=500)
+
+
+class SaleCancelOut(BaseModel):
+    sale_id: int
+    sale_number: str
+    status: DocStatus
+    cancellation_number: str
+    cancellation_type: str
+    cancellation_reason: str
+    cancelled_at: datetime
+    returned_items: int
+    returned_quantity: Decimal
 
 
 class SaleReceiptItemOut(BaseModel):
@@ -184,6 +204,10 @@ class SaleReceiptOut(BaseModel):
     invoice_customer_document_number: str | None = None
     invoice_customer_email: str | None = None
     invoice_customer_phone: str | None = None
+    cancellation_number: str | None = None
+    cancellation_type: str | None = None
+    cancellation_reason: str | None = None
+    cancelled_at: datetime | None = None
     warehouse_name: str
     seller_name: str | None
     company_name: str

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Boxes, Eye, PackagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Boxes, Eye, PackagePlus, Pencil, Plus, Power, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { getApiErrorMessage } from '@/api/client'
@@ -60,10 +60,14 @@ export const InventoryPage = () => {
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
   const [newOpen, setNewOpen] = useState(false)
   const [newForm, setNewForm] = useState<NewProductForm>(() => emptyNewProduct())
   const [newError, setNewError] = useState<string | null>(null)
   const [detailRow, setDetailRow] = useState<CurrentStockRow | null>(null)
+  const [deleteRow, setDeleteRow] = useState<CurrentStockRow | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [addRow, setAddRow] = useState<CurrentStockRow | null>(null)
   const [addQuantity, setAddQuantity] = useState('1')
   const [addError, setAddError] = useState<string | null>(null)
@@ -86,10 +90,11 @@ export const InventoryPage = () => {
   const warehousesQuery = useQuery({ queryKey: ['warehouses'], queryFn: listWarehouses })
 
   const stockQuery = useQuery({
-    queryKey: ['stock', search, dateFrom, dateTo],
+    queryKey: ['stock', search, dateFrom, dateTo, showInactive],
     queryFn: () =>
       listCurrentStock({
         search: search.trim() || undefined,
+        include_inactive: showInactive || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
       }),
@@ -141,15 +146,44 @@ export const InventoryPage = () => {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (productId: number) => deleteProduct(productId),
-    onSuccess: () => {
+    mutationFn: ({ productId, force }: { productId: number; force: boolean }) =>
+      deleteProduct(productId, force),
+    onSuccess: (response) => {
       invalidateInventory()
-      setMessage('Producto eliminado del inventario.')
+      setDeleteRow(null)
+      setDeleteConfirm('')
+      setDeleteError(null)
+      setMessage(response.message)
       setActionError(null)
     },
     onError: (unknownError) => {
       setMessage(null)
-      setActionError(getApiErrorMessage(unknownError))
+      setDeleteError(getApiErrorMessage(unknownError))
+    },
+  })
+
+  const activeMutation = useMutation({
+    mutationFn: ({ row, isActive }: { row: CurrentStockRow; isActive: boolean }) =>
+      patchProduct(row.product_id, { is_active: isActive }),
+    onSuccess: (product) => {
+      invalidateInventory()
+      setDetailRow(null)
+      setDeleteRow(null)
+      setDeleteConfirm('')
+      setDeleteError(null)
+      setMessage(
+        `Producto "${product.name}" ${product.is_active ? 'activado' : 'desactivado'} correctamente.`,
+      )
+      setActionError(null)
+    },
+    onError: (unknownError) => {
+      const errorMessage = getApiErrorMessage(unknownError)
+      if (deleteRow) {
+        setDeleteError(errorMessage)
+      } else {
+        setMessage(null)
+        setActionError(errorMessage)
+      }
     },
   })
 
@@ -167,12 +201,11 @@ export const InventoryPage = () => {
   })
 
   const handleDelete = (row: CurrentStockRow) => {
-    const confirmed = window.confirm(
-      `¿Eliminar "${row.product_name}" del inventario?\n\nEsta acción no se puede deshacer.`,
-    )
-    if (confirmed) {
-      deleteMutation.mutate(row.product_id)
-    }
+    setDeleteRow(row)
+    setDeleteConfirm('')
+    setDeleteError(null)
+    setMessage(null)
+    setActionError(null)
   }
 
   const openEdit = (row: CurrentStockRow) => {
@@ -397,11 +430,21 @@ export const InventoryPage = () => {
               </Button>
             </div>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
-            {dateFrom || dateTo
-              ? 'Las columnas Vendidos y Total vendido corresponden al rango de fechas seleccionado.'
-              : 'Las columnas Vendidos y Total vendido muestran el acumulado histórico.'}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">
+              {dateFrom || dateTo
+                ? 'Las columnas Vendidos y Total vendido corresponden al rango de fechas seleccionado.'
+                : 'Las columnas Vendidos y Total vendido muestran el acumulado histórico.'}
+            </p>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(event): void => setShowInactive(event.target.checked)}
+              />
+              Mostrar inactivos
+            </label>
+          </div>
 
           {stockQuery.isLoading ? <Loading message="Cargando inventario..." /> : null}
 
@@ -442,8 +485,10 @@ export const InventoryPage = () => {
                     <p className="text-[11px] text-slate-500">Base {formatCurrencyCOP(price.base)}</p>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
-                    <Badge variant={row.is_low_stock ? 'warning' : 'success'}>
-                      {row.is_low_stock ? 'Bajo' : 'Normal'}
+                    <Badge
+                      variant={!row.is_active ? 'default' : row.is_low_stock ? 'warning' : 'success'}
+                    >
+                      {!row.is_active ? 'Inactivo' : row.is_low_stock ? 'Bajo' : 'Normal'}
                     </Badge>
                   </td>
                   <td className="px-2.5 py-2 sm:px-3">
@@ -460,22 +505,24 @@ export const InventoryPage = () => {
                       </Button>
                       {canManage ? (
                         <>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            className="px-2.5 py-1.5"
-                            aria-label={`Agregar unidades a ${row.product_name}`}
-                            title="Agregar unidades"
-                            onClick={(): void => {
-                              setAddRow(row)
-                              setAddQuantity('1')
-                              setAddError(null)
-                              setMessage(null)
-                            }}
-                          >
-                            <PackagePlus size={14} />
-                            <span className="ml-1 hidden xl:inline">Agregar</span>
-                          </Button>
+                          {row.is_active ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="px-2.5 py-1.5"
+                              aria-label={`Agregar unidades a ${row.product_name}`}
+                              title="Agregar unidades"
+                              onClick={(): void => {
+                                setAddRow(row)
+                                setAddQuantity('1')
+                                setAddError(null)
+                                setMessage(null)
+                              }}
+                            >
+                              <PackagePlus size={14} />
+                              <span className="ml-1 hidden xl:inline">Agregar</span>
+                            </Button>
+                          ) : null}
                           <Button
                             type="button"
                             variant="secondary"
@@ -485,6 +532,17 @@ export const InventoryPage = () => {
                             onClick={(): void => openEdit(row)}
                           >
                             <Pencil size={14} />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="px-2.5 py-1.5"
+                            aria-label={`${row.is_active ? 'Desactivar' : 'Activar'} ${row.product_name}`}
+                            title={row.is_active ? 'Desactivar producto' : 'Activar producto'}
+                            disabled={activeMutation.isPending}
+                            onClick={(): void => activeMutation.mutate({ row, isActive: !row.is_active })}
+                          >
+                            <Power size={14} />
                           </Button>
                           {isAdmin ? (
                             <Button
@@ -848,8 +906,10 @@ export const InventoryPage = () => {
               </div>
               <div>
                 <p className="text-xs text-slate-500">Estado</p>
-                <Badge variant={detailRow.is_low_stock ? 'warning' : 'success'}>
-                  {detailRow.is_low_stock ? 'Stock bajo' : 'Normal'}
+                <Badge
+                  variant={!detailRow.is_active ? 'default' : detailRow.is_low_stock ? 'warning' : 'success'}
+                >
+                  {!detailRow.is_active ? 'Inactivo' : detailRow.is_low_stock ? 'Stock bajo' : 'Normal'}
                 </Badge>
               </div>
               <div>
@@ -895,18 +955,20 @@ export const InventoryPage = () => {
             <div className="flex flex-wrap justify-end gap-2">
               {canManage ? (
                 <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={(): void => {
-                      setAddRow(detailRow)
-                      setAddQuantity('1')
-                      setDetailRow(null)
-                    }}
-                  >
-                    <PackagePlus size={16} className="mr-1" />
-                    Agregar unidades
-                  </Button>
+                  {detailRow.is_active ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={(): void => {
+                        setAddRow(detailRow)
+                        setAddQuantity('1')
+                        setDetailRow(null)
+                      }}
+                    >
+                      <PackagePlus size={16} className="mr-1" />
+                      Agregar unidades
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     onClick={(): void => {
@@ -917,11 +979,123 @@ export const InventoryPage = () => {
                     <Pencil size={16} className="mr-1" />
                     Editar
                   </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={activeMutation.isPending}
+                    onClick={(): void =>
+                      activeMutation.mutate({ row: detailRow, isActive: !detailRow.is_active })
+                    }
+                  >
+                    <Power size={16} className="mr-1" />
+                    {detailRow.is_active ? 'Desactivar' : 'Activar'}
+                  </Button>
+                  {isAdmin ? (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      onClick={(): void => {
+                        handleDelete(detailRow)
+                        setDetailRow(null)
+                      }}
+                    >
+                      <Trash2 size={16} className="mr-1" />
+                      Eliminar
+                    </Button>
+                  ) : null}
                 </>
               ) : null}
               <Button type="button" variant="ghost" onClick={(): void => setDetailRow(null)}>
                 Cerrar
               </Button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={deleteRow !== null}
+        onClose={(): void => {
+          setDeleteRow(null)
+          setDeleteConfirm('')
+          setDeleteError(null)
+        }}
+        title="Eliminar producto"
+        description="Puedes conservar el historial desactivándolo o borrarlo definitivamente."
+        className="max-w-lg"
+      >
+        {deleteRow ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">{deleteRow.product_name}</p>
+              <p className="mt-1">
+                Si el producto tiene ventas, compras, ajustes o movimientos, primero puedes
+                desactivarlo para que no vuelva a aparecer en el POS.
+              </p>
+            </div>
+
+            {isAdmin ? (
+              <>
+                <p className="text-sm text-slate-600">
+                  La eliminación definitiva borra también el historial de inventario y las ventas
+                  asociadas. Úsala solo para productos de prueba o ventas registradas por error.
+                </p>
+                <Input
+                  label='Escribe "ELIMINAR" para confirmar'
+                  value={deleteConfirm}
+                  onChange={(event): void => setDeleteConfirm(event.target.value)}
+                  placeholder="ELIMINAR"
+                />
+              </>
+            ) : (
+              <p className="text-sm text-slate-600">
+                Solo un administrador puede eliminar definitivamente un producto con historial.
+              </p>
+            )}
+
+            {deleteError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {deleteError}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={(): void => {
+                  setDeleteRow(null)
+                  setDeleteConfirm('')
+                  setDeleteError(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              {deleteRow.is_active ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={activeMutation.isPending}
+                  onClick={(): void => activeMutation.mutate({ row: deleteRow, isActive: false })}
+                >
+                  <Power size={16} className="mr-1" />
+                  Desactivar
+                </Button>
+              ) : null}
+              {isAdmin ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  loading={deleteMutation.isPending}
+                  disabled={deleteConfirm.trim().toUpperCase() !== 'ELIMINAR'}
+                  onClick={(): void =>
+                    deleteMutation.mutate({ productId: deleteRow.product_id, force: true })
+                  }
+                >
+                  <Trash2 size={16} className="mr-1" />
+                  Eliminar definitivamente
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

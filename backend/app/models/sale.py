@@ -36,6 +36,12 @@ class Sale(Base):
     invoice_customer_email: Mapped[str | None] = mapped_column(String(120))
     invoice_customer_phone: Mapped[str | None] = mapped_column(String(40))
 
+    cancellation_number: Mapped[str | None] = mapped_column(String(40))
+    cancellation_type: Mapped[str | None] = mapped_column(String(20))
+    cancellation_reason: Mapped[str | None] = mapped_column(Text())
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_by: Mapped[int | None] = mapped_column(ForeignKey("ccp.users.id", ondelete="SET NULL"))
+
     subtotal: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     tax_total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
     total: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, server_default="0")
