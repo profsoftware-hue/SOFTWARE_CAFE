@@ -430,7 +430,7 @@ export const PosPage = () => {
   }
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[1fr_1.1fr]">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(380px,1.1fr)] xl:grid-cols-[1fr_1.1fr]">
       <Card title="Punto de venta (POS)" subtitle="Busca productos por nombre, SKU o código de barras">
         <Input
           label="Buscar producto"
@@ -439,7 +439,7 @@ export const PosPage = () => {
           placeholder="Ej. Café, SKU-001, 770..."
         />
 
-        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2">
+        <div className="mt-3 grid max-h-[calc(100vh-230px)] gap-2 overflow-auto pr-1 scrollbar-thin sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
           {filteredProducts.length === 0 ? (
             <EmptyState
               title="No se encontraron productos"
@@ -487,7 +487,7 @@ export const PosPage = () => {
       <Card
         title="Carrito"
         subtitle="Calcula subtotal, IVA y total"
-        className="xl:sticky xl:top-4 xl:self-start"
+        className="lg:sticky lg:top-4 lg:self-start"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={(): void => setRecentOpen(true)}>
