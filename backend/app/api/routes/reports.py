@@ -89,7 +89,9 @@ def low_stock(
         select(
             SaleItem.product_id.label("product_id"),
             Sale.warehouse_id.label("warehouse_id"),
-            func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+            func.coalesce(
+                func.sum(SaleItem.quantity + SaleItem.quantity_correction), 0
+            ).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)
@@ -158,7 +160,7 @@ def top_products(
             SaleItem.product_id,
             Product.sku,
             Product.name.label("product_name"),
-            func.sum(SaleItem.quantity).label("units_sold"),
+            func.sum(SaleItem.quantity + SaleItem.quantity_correction).label("units_sold"),
             func.sum(SaleItem.line_subtotal).label("subtotal"),
             func.sum(SaleItem.line_tax).label("tax_total"),
             func.sum(SaleItem.line_total).label("total"),
@@ -177,7 +179,7 @@ def top_products(
 
     stmt = (
         stmt.group_by(SaleItem.product_id, Product.sku, Product.name)
-        .order_by(func.sum(SaleItem.quantity).desc())
+        .order_by(func.sum(SaleItem.quantity + SaleItem.quantity_correction).desc())
         .limit(limit)
     )
 
@@ -345,7 +347,7 @@ def daily_closing(
         select(
             SaleItem.product_name_snapshot.label("product_name"),
             Product.sku,
-            func.sum(SaleItem.quantity).label("quantity"),
+            func.sum(SaleItem.quantity + SaleItem.quantity_correction).label("quantity"),
             func.sum(SaleItem.line_subtotal).label("subtotal"),
             func.sum(SaleItem.line_tax).label("tax_total"),
             func.sum(SaleItem.line_total).label("total"),

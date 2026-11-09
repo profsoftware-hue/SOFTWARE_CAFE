@@ -1,5 +1,6 @@
 from app.models.catalogs import Customer, ProductCategory, Supplier, Warehouse
 from app.models.company import CompanyProfile
+from app.models.correction import QuantityCorrection
 from app.models.inventory import (
     InventoryAdjustment,
     InventoryAdjustmentItem,
@@ -28,6 +29,7 @@ __all__ = [
     "PurchaseItem",
     "Sale",
     "SaleItem",
+    "QuantityCorrection",
     "InventoryAdjustment",
     "InventoryAdjustmentItem",
     "InventoryMovement",

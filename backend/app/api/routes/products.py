@@ -11,6 +11,7 @@ from app.api.deps import require_permissions
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.catalogs import ProductCategory, Supplier, Warehouse
+from app.models.correction import QuantityCorrection
 from app.models.enums import AdjustmentType, DocStatus
 from app.models.inventory import (
     InventoryAdjustment,
@@ -619,6 +620,7 @@ def delete_product(
                     )
                 shared_adjustment_ids.add(adjustment_id_value)
 
+        db.execute(delete(QuantityCorrection).where(QuantityCorrection.product_id == product_id))
         db.execute(delete(InventoryMovement).where(InventoryMovement.product_id == product_id))
         db.execute(delete(InventoryBalance).where(InventoryBalance.product_id == product_id))
         db.execute(delete(InventoryAdjustmentItem).where(InventoryAdjustmentItem.product_id == product_id))

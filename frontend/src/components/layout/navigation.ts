@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   UserCog,
+  Wrench,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -19,6 +20,12 @@ export const navigationItems: NavItem[] = [
   { label: 'Inventario', path: '/inventario', icon: Boxes, permissions: ['inventory.view'] },
   { label: 'Ventas / POS', path: '/pos', icon: BadgeDollarSign, permissions: ['sales.create'] },
   { label: 'Reportes', path: '/reportes', icon: ShieldCheck, permissions: ['reports.view'] },
+  {
+    label: 'Correcciones',
+    path: '/correcciones',
+    icon: Wrench,
+    permissions: ['corrections.manage'],
+  },
   {
     label: 'Usuarios y permisos',
     path: '/usuarios',

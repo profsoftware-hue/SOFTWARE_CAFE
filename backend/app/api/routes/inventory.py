@@ -413,40 +413,47 @@ def cancel_sale(
     cancellation_reason = payload.reason.strip()
     cancelled_at = _now_utc()
 
-    adjustment = InventoryAdjustment(
-        adjustment_number=generate_document_number("DEV"),
-        adjustment_type=AdjustmentType.CUSTOMER_RETURN,
-        warehouse_id=sale.warehouse_id,
-        reference_sale_id=sale.id,
-        adjusted_at=cancelled_at,
-        status=DocStatus.DRAFT,
-        reason=f"Anulación de venta {sale.sale_number}: {cancellation_reason}",
-        note=f"Nota crédito {cancellation_number}",
-        created_by=current_user.id,
-        updated_by=current_user.id,
-    )
-    db.add(adjustment)
-    db.flush()
+    return_items = [
+        (item, item.quantity + item.quantity_correction)
+        for item in items
+        if item.quantity + item.quantity_correction > 0
+    ]
 
     returned_quantity = Decimal("0")
-    for item in items:
-        product = products.get(item.product_id)
-        unit_cost = product.cost_price if product else item.unit_price_excl_tax
-        db.add(
-            InventoryAdjustmentItem(
-                adjustment_id=adjustment.id,
-                product_id=item.product_id,
-                quantity=item.quantity,
-                unit_cost=unit_cost,
-                note=f"Devolución por anulación de {sale.sale_number}",
-            )
+    if return_items:
+        adjustment = InventoryAdjustment(
+            adjustment_number=generate_document_number("DEV"),
+            adjustment_type=AdjustmentType.CUSTOMER_RETURN,
+            warehouse_id=sale.warehouse_id,
+            reference_sale_id=sale.id,
+            adjusted_at=cancelled_at,
+            status=DocStatus.DRAFT,
+            reason=f"Anulación de venta {sale.sale_number}: {cancellation_reason}",
+            note=f"Nota crédito {cancellation_number}",
+            created_by=current_user.id,
+            updated_by=current_user.id,
         )
-        returned_quantity += item.quantity
+        db.add(adjustment)
+        db.flush()
 
-    # Los ítems deben existir antes de confirmar el ajuste para que el trigger
-    # inserte los movimientos de entrada al inventario.
-    db.flush()
-    adjustment.status = DocStatus.CONFIRMED
+        for item, effective_quantity in return_items:
+            product = products.get(item.product_id)
+            unit_cost = product.cost_price if product else item.unit_price_excl_tax
+            db.add(
+                InventoryAdjustmentItem(
+                    adjustment_id=adjustment.id,
+                    product_id=item.product_id,
+                    quantity=effective_quantity,
+                    unit_cost=unit_cost,
+                    note=f"Devolución por anulación de {sale.sale_number}",
+                )
+            )
+            returned_quantity += effective_quantity
+
+        # Los ítems deben existir antes de confirmar el ajuste para que el trigger
+        # inserte los movimientos de entrada al inventario.
+        db.flush()
+        adjustment.status = DocStatus.CONFIRMED
 
     sale.status = DocStatus.CANCELLED
     sale.cancellation_number = cancellation_number
@@ -474,7 +481,7 @@ def cancel_sale(
         cancellation_type=payload.cancellation_type,
         cancellation_reason=cancellation_reason,
         cancelled_at=cancelled_at,
-        returned_items=len(items),
+        returned_items=len(return_items),
         returned_quantity=returned_quantity,
     )
 
@@ -654,7 +661,9 @@ def current_stock(
         select(
             SaleItem.product_id.label("product_id"),
             Sale.warehouse_id.label("warehouse_id"),
-            func.coalesce(func.sum(SaleItem.quantity), 0).label("sold_quantity"),
+            func.coalesce(
+                func.sum(SaleItem.quantity + SaleItem.quantity_correction), 0
+            ).label("sold_quantity"),
             func.coalesce(func.sum(SaleItem.line_total), 0).label("sold_total"),
         )
         .join(Sale, Sale.id == SaleItem.sale_id)

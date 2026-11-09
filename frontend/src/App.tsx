@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/auth/context'
 import { ProtectedRoute } from '@/auth/ProtectedRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { CorrectionsPage } from '@/pages/CorrectionsPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { InventoryPage } from '@/pages/InventoryPage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -56,6 +57,14 @@ const App = () => {
           element={
             <ProtectedRoute allowPermissions={['reports.view']}>
               <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/correcciones"
+          element={
+            <ProtectedRoute allowPermissions={['corrections.manage']}>
+              <CorrectionsPage />
             </ProtectedRoute>
           }
         />
