@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatCurrencyCOP,
+  formatCurrencyCOPRounded,
   formatDecimalInput,
   formatNumber,
   formatThousands,
@@ -25,6 +26,7 @@ describe('format helpers', () => {
     expect(formatNumber(1234.5, 1)).toBe('1.234,5')
     expect(formatCurrencyCOP(43197)).toContain('43.197')
     expect(formatCurrencyCOP(1234.56)).toContain('1.234,56')
+    expect(formatCurrencyCOPRounded(1234.56)).toContain('1.235')
   })
 
   it('formatea y lee separadores de miles', () => {

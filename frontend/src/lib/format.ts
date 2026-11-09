@@ -10,6 +10,18 @@ export const formatCurrencyCOP = (value: number | string): string => {
   }).format(numeric)
 }
 
+export const formatCurrencyCOPRounded = (value: number | string): string => {
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) return '$ 0'
+
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(numeric)
+}
+
 export const formatThousands = (value: number | string): string => {
   const digits = String(value).replace(/\D/g, '')
   if (!digits) return ''

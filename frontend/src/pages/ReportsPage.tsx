@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/Button'
 import { DailyClosingModal } from '@/components/DailyClosingModal'
 import { downloadCsv } from '@/lib/csv'
 import { CUSTOMER_TYPE_LABELS, formatDocument } from '@/lib/customers'
-import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
+import { formatCurrencyCOPRounded, formatDateTime, formatNumber, toISODate } from '@/lib/format'
 
 const today = new Date()
 
@@ -61,8 +61,8 @@ export const ReportsPage = () => {
         row.product_name,
         row.sku,
         row.warehouse_name,
-        Number(row.current_stock),
-        Number(row.min_stock),
+        Math.round(Number(row.current_stock)),
+        Math.round(Number(row.min_stock)),
       ]),
     )
   }
@@ -76,10 +76,10 @@ export const ReportsPage = () => {
       topProductsQuery.data.map((row) => [
         row.product_name,
         row.sku,
-        Number(row.units_sold),
-        row.subtotal,
-        row.tax_total,
-        row.total,
+        Math.round(Number(row.units_sold)),
+        Math.round(Number(row.subtotal)),
+        Math.round(Number(row.tax_total)),
+        Math.round(Number(row.total)),
       ]),
     )
   }
@@ -95,9 +95,9 @@ export const ReportsPage = () => {
         formatDocument(row.document_type, row.document_number),
         row.email ?? '',
         row.phone ?? '',
-        row.total_sales,
+        Math.round(Number(row.total_sales)),
         row.invoice_count,
-        row.total_invoiced,
+        Math.round(Number(row.total_invoiced)),
       ]),
     )
   }
@@ -114,7 +114,7 @@ export const ReportsPage = () => {
         formatDocument(row.document_type, row.document_number),
         row.email ?? '',
         row.phone ?? '',
-        row.total,
+        Math.round(Number(row.total)),
       ]),
     )
   }
@@ -147,7 +147,7 @@ export const ReportsPage = () => {
             <div>
               <p className="text-xs text-slate-500">Total vendido</p>
               <p className="text-lg font-semibold text-slate-800">
-                {formatCurrencyCOP(closingQuery.data?.total ?? 0)}
+                {formatCurrencyCOPRounded(closingQuery.data?.total ?? 0)}
               </p>
             </div>
           </div>
@@ -189,7 +189,7 @@ export const ReportsPage = () => {
       <section className="grid gap-4 sm:grid-cols-2">
         <Card title="Valor total de inventario">
           <p className="text-3xl font-bold text-blue-700">
-            {formatCurrencyCOP(inventoryValueQuery.data?.total_inventory_value ?? 0)}
+            {formatCurrencyCOPRounded(inventoryValueQuery.data?.total_inventory_value ?? 0)}
           </p>
           <p className="mt-1 text-sm text-slate-500">Basado en costo * stock actual.</p>
         </Card>
@@ -197,11 +197,11 @@ export const ReportsPage = () => {
         <Card title="Ventas por rango">
           <p className="text-sm text-slate-500">Tickets: {salesRangeQuery.data?.tickets ?? 0}</p>
           <p className="mt-2 text-xl font-semibold text-slate-800">
-            Total: {formatCurrencyCOP(salesRangeQuery.data?.total ?? 0)}
+            Total: {formatCurrencyCOPRounded(salesRangeQuery.data?.total ?? 0)}
           </p>
           <p className="mt-1 text-sm text-slate-600">
-            Subtotal {formatCurrencyCOP(salesRangeQuery.data?.subtotal ?? 0)} | IVA{' '}
-            {formatCurrencyCOP(salesRangeQuery.data?.tax_total ?? 0)}
+            Subtotal {formatCurrencyCOPRounded(salesRangeQuery.data?.subtotal ?? 0)} | IVA{' '}
+            {formatCurrencyCOPRounded(salesRangeQuery.data?.tax_total ?? 0)}
           </p>
         </Card>
       </section>
@@ -226,8 +226,8 @@ export const ReportsPage = () => {
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
                   <td className="px-3 py-2.5">{row.warehouse_name}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 3)}</td>
-                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 3)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.current_stock, 0)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.min_stock, 0)}</td>
                 </tr>
               ))}
             </Table>
@@ -252,10 +252,10 @@ export const ReportsPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 3)}</td>
-                  <td className="px-3 py-2.5">{formatCurrencyCOP(row.subtotal)}</td>
-                  <td className="px-3 py-2.5">{formatCurrencyCOP(row.tax_total)}</td>
-                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 0)}</td>
+                  <td className="px-3 py-2.5">{formatCurrencyCOPRounded(row.subtotal)}</td>
+                  <td className="px-3 py-2.5">{formatCurrencyCOPRounded(row.tax_total)}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOPRounded(row.total)}</td>
                 </tr>
               ))}
             </Table>
@@ -293,7 +293,7 @@ export const ReportsPage = () => {
                     <p className="text-xs text-slate-500">{row.phone ?? '-'}</p>
                   </td>
                   <td className="px-3 py-2.5">{row.invoice_count}</td>
-                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total_invoiced)}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOPRounded(row.total_invoiced)}</td>
                 </tr>
               ))}
             </Table>
@@ -324,7 +324,7 @@ export const ReportsPage = () => {
                   <td className="px-3 py-2.5 text-xs">
                     {formatDocument(row.document_type, row.document_number) || '-'}
                   </td>
-                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOPRounded(row.total)}</td>
                 </tr>
               ))}
             </Table>

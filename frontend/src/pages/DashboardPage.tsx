@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Loading } from '@/components/ui/Loading'
 import { Table } from '@/components/ui/Table'
 import { cn } from '@/lib/cn'
-import { formatCurrencyCOP, formatDateTime, formatNumber, toISODate } from '@/lib/format'
+import { formatCurrencyCOPRounded, formatDateTime, formatNumber, toISODate } from '@/lib/format'
 
 const today = new Date()
 const thirtyDaysAgo = new Date(today)
@@ -55,7 +55,7 @@ export const DashboardPage = () => {
   const cards = [
     {
       title: 'Ventas del día',
-      value: formatCurrencyCOP(salesTodayQuery.data?.total ?? 0),
+      value: formatCurrencyCOPRounded(salesTodayQuery.data?.total ?? 0),
       icon: ShoppingBag,
       subtitle: `${salesTodayQuery.data?.tickets ?? 0} tickets · ${formatNumber(
         salesTodayQuery.data?.units_sold ?? 0,
@@ -67,7 +67,7 @@ export const DashboardPage = () => {
     },
     {
       title: 'Valor de inventario',
-      value: formatCurrencyCOP(inventoryValueQuery.data?.total_inventory_value ?? 0),
+      value: formatCurrencyCOPRounded(inventoryValueQuery.data?.total_inventory_value ?? 0),
       icon: DollarSign,
       subtitle: 'Costo total actual del inventario',
       cardClass: 'border-cyan-300 border-l-4 border-l-ccp-teal bg-gradient-to-br from-cyan-200/60 via-white to-white',
@@ -145,10 +145,10 @@ export const DashboardPage = () => {
                     <p className="font-medium text-slate-800">{row.product_name}</p>
                     <p className="text-xs text-slate-500">SKU: {row.sku}</p>
                   </td>
-                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 3)}</td>
-                  <td className="px-3 py-2.5">{formatCurrencyCOP(row.subtotal)}</td>
-                  <td className="px-3 py-2.5">{formatCurrencyCOP(row.tax_total)}</td>
-                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOP(row.total)}</td>
+                  <td className="px-3 py-2.5">{formatNumber(row.units_sold, 0)}</td>
+                  <td className="px-3 py-2.5">{formatCurrencyCOPRounded(row.subtotal)}</td>
+                  <td className="px-3 py-2.5">{formatCurrencyCOPRounded(row.tax_total)}</td>
+                  <td className="px-3 py-2.5 font-semibold">{formatCurrencyCOPRounded(row.total)}</td>
                 </tr>
               ))}
             </Table>
@@ -177,8 +177,8 @@ export const DashboardPage = () => {
                     <p className="text-xs text-amber-700">{row.warehouse_name}</p>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">
-                    Disponible: <strong>{formatNumber(row.current_stock, 3)}</strong> | Mínimo:{' '}
-                    <strong>{formatNumber(row.min_stock, 3)}</strong>
+                    Disponible: <strong>{formatNumber(row.current_stock, 0)}</strong> | Mínimo:{' '}
+                    <strong>{formatNumber(row.min_stock, 0)}</strong>
                   </p>
                 </article>
               ))}

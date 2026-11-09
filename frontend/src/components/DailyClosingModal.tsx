@@ -1,7 +1,7 @@
 import { Printer, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/Button'
-import { formatCurrencyCOP, formatNumber } from '@/lib/format'
+import { formatCurrencyCOPRounded, formatNumber } from '@/lib/format'
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments'
 import type { DailyClosing } from '@/types/api'
 
@@ -41,9 +41,9 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
       .map(
         (item) => `
           <tr>
-            <td class="qty">${formatNumber(item.quantity, 3)}</td>
+            <td class="qty">${formatNumber(item.quantity, 0)}</td>
             <td class="desc">${escapeHtml(item.product_name)}${item.sku ? `<div class="small">${escapeHtml(item.sku)}</div>` : ''}</td>
-            <td class="money">${formatCurrencyCOP(item.total)}</td>
+            <td class="money">${formatCurrencyCOPRounded(item.total)}</td>
           </tr>
         `,
       )
@@ -54,7 +54,7 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
         (payment) => `
           <div>
             <span>${escapeHtml(PAYMENT_METHOD_LABELS[payment.payment_method] ?? payment.payment_method)} (${payment.tickets})</span>
-            <span>${formatCurrencyCOP(payment.total)}</span>
+            <span>${formatCurrencyCOPRounded(payment.total)}</span>
           </div>
         `,
       )
@@ -111,9 +111,9 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
   </table>
 
   <div class="totals">
-    <div><span>Subtotal</span><span>${formatCurrencyCOP(data.subtotal)}</span></div>
-    <div><span>IVA</span><span>${formatCurrencyCOP(data.tax_total)}</span></div>
-    <div class="total"><span>TOTAL VENDIDO</span><span>${formatCurrencyCOP(data.total)}</span></div>
+    <div><span>Subtotal</span><span>${formatCurrencyCOPRounded(data.subtotal)}</span></div>
+    <div><span>IVA</span><span>${formatCurrencyCOPRounded(data.tax_total)}</span></div>
+    <div class="total"><span>TOTAL VENDIDO</span><span>${formatCurrencyCOPRounded(data.total)}</span></div>
   </div>
 
   <div class="section-title">Medios de pago</div>
@@ -196,12 +196,12 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
                 <tbody>
                   {data.items.map((item, index) => (
                     <tr key={`${item.sku ?? item.product_name}-${index}`} className="border-b border-dotted border-slate-200">
-                      <td className="py-1 text-center">{formatNumber(item.quantity, 3)}</td>
+                      <td className="py-1 text-center">{formatNumber(item.quantity, 0)}</td>
                       <td className="py-1">
                         <p className="text-slate-800">{item.product_name}</p>
                         {item.sku ? <p className="text-[9px] text-slate-400">{item.sku}</p> : null}
                       </td>
-                      <td className="py-1 text-right whitespace-nowrap">{formatCurrencyCOP(item.total)}</td>
+                      <td className="py-1 text-right whitespace-nowrap">{formatCurrencyCOPRounded(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -211,15 +211,15 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
             <div className="mt-2 space-y-0.5 text-[11px] text-slate-700">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span>{formatCurrencyCOP(data.subtotal)}</span>
+                <span>{formatCurrencyCOPRounded(data.subtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span>IVA</span>
-                <span>{formatCurrencyCOP(data.tax_total)}</span>
+                <span>{formatCurrencyCOPRounded(data.tax_total)}</span>
               </div>
               <div className="flex justify-between border-t border-slate-300 pt-1 text-sm font-bold text-slate-900">
                 <span>Total vendido</span>
-                <span>{formatCurrencyCOP(data.total)}</span>
+                <span>{formatCurrencyCOPRounded(data.total)}</span>
               </div>
             </div>
 
@@ -234,7 +234,7 @@ export const DailyClosingModal = ({ open, data, loading = false, onClose }: Dail
                       {PAYMENT_METHOD_LABELS[payment.payment_method] ?? payment.payment_method} (
                       {payment.tickets})
                     </span>
-                    <span>{formatCurrencyCOP(payment.total)}</span>
+                    <span>{formatCurrencyCOPRounded(payment.total)}</span>
                   </div>
                 ))}
               </div>
