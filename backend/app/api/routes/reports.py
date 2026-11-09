@@ -203,11 +203,19 @@ def sales_range(
             func.coalesce(func.sum(Sale.total), 0).label("total"),
         ).where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
     ).mappings().one()
+    units_sold = db.scalar(
+        select(
+            func.coalesce(func.sum(SaleItem.quantity + SaleItem.quantity_correction), 0)
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(and_(Sale.status == DocStatus.CONFIRMED, Sale.sold_at >= start, Sale.sold_at <= end))
+    )
 
     return SalesRangeOut(
         date_from=date_from,
         date_to=date_to,
         tickets=int(row["tickets"]),
+        units_sold=units_sold or Decimal("0"),
         subtotal=row["subtotal"],
         tax_total=row["tax_total"],
         total=row["total"],

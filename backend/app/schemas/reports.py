@@ -26,6 +26,7 @@ class SalesRangeOut(BaseModel):
     date_from: date
     date_to: date
     tickets: int
+    units_sold: Decimal = Decimal("0")
     subtotal: Decimal
     tax_total: Decimal
     total: Decimal
