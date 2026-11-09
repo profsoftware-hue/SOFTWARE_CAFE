@@ -436,6 +436,105 @@ def test_shared_sale_requires_cancellation_before_force_delete() -> None:
     assert deleted_b.status_code == 200, deleted_b.text
 
 
+def test_admin_quantity_corrections() -> None:
+    _ensure_admin()
+    headers = _login_headers()
+
+    product = client.post(
+        "/api/v1/products/quick",
+        json={
+            "name": "Producto corrección",
+            "quantity": 20,
+            "cost_price": 500,
+            "sale_price_excl_tax": 1000,
+            "sku": "SMOKE-CORR-001",
+        },
+        headers=headers,
+    )
+    assert product.status_code == 201, product.text
+    product_id = product.json()["id"]
+
+    sale = client.post(
+        "/api/v1/inventory/sales",
+        json={
+            "warehouse_id": 1,
+            "payment_method": "CASH",
+            "items": [{"product_id": product_id, "quantity": 10}],
+            "confirm": True,
+        },
+        headers=headers,
+    )
+    assert sale.status_code == 201, sale.text
+    sale_id = sale.json()["id"]
+    assert float(sale.json()["total"]) == 11900.0
+
+    detail = client.get(f"/api/v1/corrections/sales/{sale_id}", headers=headers)
+    assert detail.status_code == 200, detail.text
+    item = detail.json()["items"][0]
+    sale_item_id = item["sale_item_id"]
+    assert float(item["quantity"]) == 10.0
+    assert float(item["effective_quantity"]) == 10.0
+
+    corrected = client.post(
+        f"/api/v1/corrections/sales/{sale_id}/items/{sale_item_id}",
+        json={"corrected_quantity": 2, "reason": "Se digitaron 10 y eran 2"},
+        headers=headers,
+    )
+    assert corrected.status_code == 200, corrected.text
+    corrected_data = corrected.json()
+    assert float(corrected_data["difference"]) == -8.0
+    assert float(corrected_data["stock_quantity"]) == 18.0
+    assert float(corrected_data["effective_quantity"]) == 2.0
+
+    receipt = client.get(f"/api/v1/inventory/sales/{sale_id}/receipt", headers=headers)
+    assert receipt.status_code == 200
+    assert float(receipt.json()["total"]) == 11900.0
+    assert float(receipt.json()["items"][0]["quantity"]) == 10.0
+
+    stock = client.get("/api/v1/inventory/stock/current", headers=headers)
+    assert stock.status_code == 200
+    row = next(item for item in stock.json() if item["product_id"] == product_id)
+    assert float(row["sold_quantity"]) == 2.0
+    assert float(row["sold_total"]) == 11900.0
+    assert float(row["current_stock"]) == 18.0
+
+    detail_after = client.get(f"/api/v1/corrections/sales/{sale_id}", headers=headers)
+    assert detail_after.status_code == 200
+    assert len(detail_after.json()["history"]) == 1
+    assert float(detail_after.json()["items"][0]["effective_quantity"]) == 2.0
+
+    cancelled = client.post(
+        f"/api/v1/inventory/sales/{sale_id}/cancel",
+        json={"cancellation_type": "ERROR", "reason": "Venta corregida y anulada"},
+        headers=headers,
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert float(cancelled.json()["returned_quantity"]) == 2.0
+
+    stock_after_cancel = client.get("/api/v1/inventory/stock/current", headers=headers)
+    row_after_cancel = next(
+        item for item in stock_after_cancel.json() if item["product_id"] == product_id
+    )
+    assert float(row_after_cancel["current_stock"]) == 20.0
+
+    inventory_corrected = client.post(
+        "/api/v1/corrections/inventory",
+        json={
+            "product_id": product_id,
+            "warehouse_id": 1,
+            "corrected_quantity": 15,
+            "reason": "Conteo físico",
+        },
+        headers=headers,
+    )
+    assert inventory_corrected.status_code == 200, inventory_corrected.text
+    assert float(inventory_corrected.json()["difference"]) == -5.0
+    assert float(inventory_corrected.json()["stock_quantity"]) == 15.0
+
+    deleted = client.delete(f"/api/v1/products/{product_id}?force=true", headers=headers)
+    assert deleted.status_code == 200, deleted.text
+
+
 def test_roles_and_permissions_are_enforced() -> None:
     _ensure_admin()
     admin_headers = _login_headers()
@@ -631,5 +730,7 @@ def test_admin_guard_and_permission_hierarchy() -> None:
     inv_headers = _login_headers("invmanager", "Inventory123*")
     products = client.get("/api/v1/products?limit=1", headers=inv_headers)
     reports = client.get("/api/v1/reports/inventory-value", headers=inv_headers)
+    corrections = client.get("/api/v1/corrections/sales", headers=inv_headers)
     assert products.status_code == 200
     assert reports.status_code == 403
+    assert corrections.status_code == 403

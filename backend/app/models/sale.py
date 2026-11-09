@@ -66,6 +66,9 @@ class SaleItem(Base):
     product_name_snapshot: Mapped[str] = mapped_column(String(180), nullable=False)
     barcode_snapshot: Mapped[str | None] = mapped_column(String(60))
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 3), nullable=False)
+    quantity_correction: Mapped[Decimal] = mapped_column(
+        Numeric(14, 3), nullable=False, server_default="0"
+    )
     unit_price_excl_tax: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
     vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False, server_default="0.19")
 

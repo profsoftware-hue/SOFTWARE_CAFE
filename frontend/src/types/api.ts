@@ -267,6 +267,62 @@ export interface RecentSale {
   cancellation_number: string | null
 }
 
+export interface CorrectionSaleItem {
+  sale_item_id: number
+  product_id: number
+  product_name: string
+  quantity: string
+  quantity_correction: string
+  effective_quantity: string
+  unit_price_excl_tax: string
+  line_total: string
+}
+
+export interface QuantityCorrection {
+  id: number
+  correction_type: 'SALE' | 'INVENTORY'
+  sale_id: number | null
+  sale_item_id: number | null
+  product_id: number
+  warehouse_id: number
+  previous_quantity: string
+  corrected_quantity: string
+  difference: string
+  reason: string
+  adjustment_id: number | null
+  created_by: number | null
+  created_by_name: string | null
+  created_at: string
+}
+
+export interface CorrectionSale {
+  sale_id: number
+  sale_number: string
+  sold_at: string
+  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED'
+  total: string
+  customer_name: string | null
+  items: CorrectionSaleItem[]
+  history: QuantityCorrection[]
+}
+
+export interface QuantityCorrectionResult {
+  correction_id: number
+  correction_type: 'SALE' | 'INVENTORY'
+  sale_id: number | null
+  sale_item_id: number | null
+  product_id: number
+  warehouse_id: number
+  previous_quantity: string
+  corrected_quantity: string
+  difference: string
+  stock_quantity: string
+  effective_quantity: string | null
+  adjustment_id: number | null
+  reason: string
+  created_at: string
+}
+
 export interface SaleReceiptItem {
   product_name: string
   barcode: string | null
