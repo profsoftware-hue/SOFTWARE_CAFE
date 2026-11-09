@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Boxes, DollarSign, PackageSearch, ShoppingBag } from 'lucide-react'
-import { useState } from 'react'
 
 import { listProducts } from '@/api/products'
 import { getInventoryValue, getLowStock, getSalesRange, getTopProducts } from '@/api/reports'
@@ -16,7 +15,6 @@ const thirtyDaysAgo = new Date(today)
 thirtyDaysAgo.setDate(today.getDate() - 30)
 
 export const DashboardPage = () => {
-  const [renderedAt] = useState(() => formatDateTime(new Date()))
   const salesFrom = toISODate(today)
   const salesTo = toISODate(today)
 
@@ -45,12 +43,24 @@ export const DashboardPage = () => {
     queryFn: () => listProducts({ limit: 500 }),
   })
 
+  const lastUpdatedAt = Math.max(
+    inventoryValueQuery.dataUpdatedAt,
+    salesTodayQuery.dataUpdatedAt,
+    lowStockQuery.dataUpdatedAt,
+    topProductsQuery.dataUpdatedAt,
+    productsQuery.dataUpdatedAt,
+  )
+  const renderedAt = lastUpdatedAt ? formatDateTime(new Date(lastUpdatedAt)) : 'Sin actualizar'
+
   const cards = [
     {
       title: 'Ventas del día',
       value: formatCurrencyCOP(salesTodayQuery.data?.total ?? 0),
       icon: ShoppingBag,
-      subtitle: `${salesTodayQuery.data?.tickets ?? 0} tickets confirmados`,
+      subtitle: `${salesTodayQuery.data?.tickets ?? 0} tickets · ${formatNumber(
+        salesTodayQuery.data?.units_sold ?? 0,
+        3,
+      )} unidades`,
       cardClass: 'border-blue-200 border-l-4 border-l-blue-700 bg-gradient-to-br from-blue-50 via-white to-white',
       iconClass: 'bg-blue-700 text-white',
       titleClass: 'text-blue-800',

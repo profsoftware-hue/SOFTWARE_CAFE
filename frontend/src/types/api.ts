@@ -250,6 +250,7 @@ export interface SalesRange {
   date_from: string
   date_to: string
   tickets: number
+  units_sold: string
   subtotal: string
   tax_total: string
   total: string
